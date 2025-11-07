@@ -91,14 +91,62 @@ function drawEmptyCircle(
   doc: PDFKit.PDFDocument,
   x: number,
   y: number,
-  circleDiameter: number
+  pinDiameter: number,
+  circleDiameter: number,
+  backgroundColor: string,
+  borderColor: string,
+  borderWidth: number,
+  text: string,
+  textPosition: string,
+  textColor: string,
+  textSize: number,
+  textOutline: string,
+  textOutlineWidth: number
 ): void {
   const circleRadius = circleDiameter / 2;
   
   doc.save();
   
+  // Draw background if specified
+  if (backgroundColor) {
+    doc.circle(x, y, circleRadius).fill(backgroundColor);
+  }
+  
+  // Draw border ring if specified
+  if (borderColor && borderWidth > 0) {
+    // Border starts at (pinDiameter - borderWidth) and extends to circleDiameter
+    const borderInnerRadius = (pinDiameter - borderWidth * 2) / 2;
+    const borderOuterRadius = circleRadius;
+    
+    // Draw the outer circle with border color
+    doc.circle(x, y, borderOuterRadius).fill(borderColor);
+    
+    // Cut out the inner circle to create a ring effect
+    if (backgroundColor) {
+      doc.circle(x, y, borderInnerRadius).fill(backgroundColor);
+    } else {
+      doc.circle(x, y, borderInnerRadius).fill('white');
+    }
+  }
+  
   // Draw the cutting outline
   doc.circle(x, y, circleRadius).stroke();
+  
+  // Draw text overlay if specified
+  if (text) {
+    drawTextOverlay(
+      doc,
+      text,
+      x,
+      y,
+      pinDiameter,
+      textPosition,
+      textColor,
+      textSize,
+      textOutline,
+      textOutlineWidth
+    );
+  }
   
   doc.restore();
 }
@@ -190,6 +238,7 @@ function drawCircularImage(
   y: number,
   pinDiameter: number,
   circleDiameter: number,
+  backgroundColor: string,
   borderColor: string,
   borderWidth: number,
   text: string,
@@ -204,7 +253,11 @@ function drawCircularImage(
 
   doc.save();
   
-  if (edgeColor) {
+  // Priority: explicit backgroundColor > edgeColor from fill
+  if (backgroundColor) {
+    // Draw the solid color background circle with explicit color
+    doc.circle(x, y, circleRadius).fill(backgroundColor);
+  } else if (edgeColor) {
     const hexColor = `#${edgeColor.r.toString(16).padStart(2, '0')}${edgeColor.g.toString(16).padStart(2, '0')}${edgeColor.b.toString(16).padStart(2, '0')}`;
     // Draw the solid color background circle
     doc.circle(x, y, circleRadius).fill(hexColor);
@@ -220,8 +273,10 @@ function drawCircularImage(
     doc.circle(x, y, borderOuterRadius).fill(borderColor);
     
     // Cut out the inner circle to create a ring effect
-    // We do this by drawing a white/transparent circle on top
-    if (edgeColor) {
+    // Priority: explicit backgroundColor > edgeColor > white
+    if (backgroundColor) {
+      doc.circle(x, y, borderInnerRadius).fill(backgroundColor);
+    } else if (edgeColor) {
       const hexColor = `#${edgeColor.r.toString(16).padStart(2, '0')}${edgeColor.g.toString(16).padStart(2, '0')}${edgeColor.b.toString(16).padStart(2, '0')}`;
       doc.circle(x, y, borderInnerRadius).fill(hexColor);
     } else {
@@ -286,6 +341,7 @@ export async function generatePinPDF(
   pinSize: PinSize,
   fill: boolean,
   duplicate: boolean,
+  backgroundColor: string,
   borderColor: string,
   borderWidth: number,
   texts: string[],
@@ -299,11 +355,15 @@ export async function generatePinPDF(
   
   // If no images provided, generate a template with empty circles
   if (imagePaths.length === 0) {
-    console.log('Generating blank template...');
-    console.log(`Pin size: ${config.pinSize}mm (circle: ${config.circleSize}mm)`);
-    console.log(`Layout: ${config.circlesPerPage} circles on 1 page`);
+    // If texts are provided without images, render them on blank circles
+    const hasTexts = texts.length > 0;
+    const totalCircles = hasTexts ? Math.max(texts.length, config.circlesPerPage) : config.circlesPerPage;
     
-    const positions = calculateLayout(config.circlesPerPage, config);
+    console.log(hasTexts ? 'Generating pins with text on blank templates...' : 'Generating blank template...');
+    console.log(`Pin size: ${config.pinSize}mm (circle: ${config.circleSize}mm)`);
+    console.log(`Layout: ${totalCircles} circles on 1 page`);
+    
+    const positions = calculateLayout(totalCircles, config);
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false });
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
@@ -311,9 +371,24 @@ export async function generatePinPDF(
     doc.addPage({ size: 'A4', margin: 0 });
     console.log('Generating page 1/1...');
     
-    for (let i = 0; i < config.circlesPerPage; i++) {
+    for (let i = 0; i < totalCircles; i++) {
       const position = positions[i];
-      drawEmptyCircle(doc, position.x, position.y, config.circleSizePt);
+      drawEmptyCircle(
+        doc, 
+        position.x, 
+        position.y, 
+        config.pinSizePt,
+        config.circleSizePt,
+        backgroundColor,
+        borderColor,
+        borderWidth * 2.83465, // Convert mm to points
+        texts[i] || '', // Get text for this circle, or empty string
+        textPosition,
+        textColor,
+        textSize,
+        textOutline,
+        textOutlineWidth
+      );
     }
     
     doc.end();
@@ -378,6 +453,7 @@ export async function generatePinPDF(
       position.y,
       config.pinSizePt,
       config.circleSizePt,
+      backgroundColor,
       borderColor,
       borderWidth * 2.83465, // Convert mm to points
       texts[imageIdx] || '', // Get text for this image index, or empty string
