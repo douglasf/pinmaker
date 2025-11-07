@@ -14,7 +14,7 @@ program
   .version('1.0.0');
 
 program
-  .argument('<images...>', 'Input image files')
+  .argument('[images...]', 'Input image files (omit to generate blank template)')
   .option('-s, --size <size>', 'Pin size: 32mm or 58mm', '32mm')
   .option('-o, --output <file>', 'Output PDF file', 'pins.pdf')
   .option('-f, --fill', 'Fill background with average edge color', false)
@@ -27,18 +27,20 @@ program
         process.exit(1);
       }
       
-      // Validate image files exist
-      const missingFiles: string[] = [];
-      for (const imagePath of images) {
-        if (!fs.existsSync(imagePath)) {
-          missingFiles.push(imagePath);
+      // Validate image files exist (if any provided)
+      if (images && images.length > 0) {
+        const missingFiles: string[] = [];
+        for (const imagePath of images) {
+          if (!fs.existsSync(imagePath)) {
+            missingFiles.push(imagePath);
+          }
         }
-      }
-      
-      if (missingFiles.length > 0) {
-        console.error('Error: The following image files do not exist:');
-        missingFiles.forEach(f => console.error(`  - ${f}`));
-        process.exit(1);
+        
+        if (missingFiles.length > 0) {
+          console.error('Error: The following image files do not exist:');
+          missingFiles.forEach(f => console.error(`  - ${f}`));
+          process.exit(1);
+        }
       }
       
       // Resolve output path
@@ -46,7 +48,7 @@ program
       
       // Generate PDF
       console.log('\n🎨 Pin Maker PDF Generator\n');
-      await generatePinPDF(images, outputPath, pinSize, options.fill);
+      await generatePinPDF(images || [], outputPath, pinSize, options.fill);
       console.log('\n✨ Done!\n');
       
     } catch (error) {

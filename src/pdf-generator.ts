@@ -85,6 +85,25 @@ async function processImage(
 }
 
 /**
+ * Draws an empty circle outline for template generation.
+ */
+function drawEmptyCircle(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  circleDiameter: number
+): void {
+  const circleRadius = circleDiameter / 2;
+  
+  doc.save();
+  
+  // Draw the cutting outline
+  doc.circle(x, y, circleRadius).stroke();
+  
+  doc.restore();
+}
+
+/**
  * Draws a circular image with a solid color background.
  */
 function drawCircularImage(
@@ -151,6 +170,36 @@ export async function generatePinPDF(
   fill: boolean
 ): Promise<void> {
   const config: PinConfig = PIN_CONFIGS[pinSize];
+  
+  // If no images provided, generate a template with empty circles
+  if (imagePaths.length === 0) {
+    console.log('Generating blank template...');
+    console.log(`Pin size: ${config.pinSize}mm (circle: ${config.circleSize}mm)`);
+    console.log(`Layout: ${config.circlesPerPage} circles on 1 page`);
+    
+    const positions = calculateLayout(config.circlesPerPage, config);
+    const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false });
+    const stream = fs.createWriteStream(outputPath);
+    doc.pipe(stream);
+    
+    doc.addPage({ size: 'A4', margin: 0 });
+    console.log('Generating page 1/1...');
+    
+    for (let i = 0; i < config.circlesPerPage; i++) {
+      const position = positions[i];
+      drawEmptyCircle(doc, position.x, position.y, config.circleSizePt);
+    }
+    
+    doc.end();
+    await new Promise<void>((resolve, reject) => {
+      stream.on('finish', resolve);
+      stream.on('error', reject);
+    });
+    
+    console.log(`✓ PDF generated: ${outputPath}`);
+    return;
+  }
+  
   const totalCircles = Math.max(imagePaths.length, config.circlesPerPage);
   const positions = calculateLayout(totalCircles, config);
   const totalPages = getTotalPages(positions);
