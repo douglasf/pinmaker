@@ -1,202 +1,213 @@
 import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
 import fs from 'fs';
-import { PinConfig, PinSize, PIN_CONFIGS, A4_PAGE } from './types.js';
+import { PinConfig, PinSize, PIN_CONFIGS } from './types.js';
 import { calculateLayout, getTotalPages } from './layout.js';
 
 /**
- * Process an image to fit within the pin size (not the full circle)
- * Fits the entire image (including rectangles) within the circular area
+ * Extracts the average color from the edges of an image.
+ */
+async function extractEdgeColor(image: sharp.Sharp): Promise<{ r: number; g: number; b: number }> {
+  const { data, info } = await image
+    .clone()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const { width, height, channels } = info;
+  let totalR = 0;
+  let totalG = 0;
+  let totalB = 0;
+  let pixelCount = 0;
+
+  // Process top and bottom edges
+  for (let x = 0; x < width; x++) {
+    // Top edge (y=0)
+    const topIdx = x * channels;
+    totalR += data[topIdx];
+    totalG += data[topIdx + 1];
+    totalB += data[topIdx + 2];
+
+    // Bottom edge (y=height-1)
+    const bottomIdx = ((height - 1) * width + x) * channels;
+    totalR += data[bottomIdx];
+    totalG += data[bottomIdx + 1];
+    totalB += data[bottomIdx + 2];
+  }
+  pixelCount += width * 2;
+
+  // Process left and right edges (excluding corners already counted)
+  for (let y = 1; y < height - 1; y++) {
+    // Left edge (x=0)
+    const leftIdx = (y * width) * channels;
+    totalR += data[leftIdx];
+    totalG += data[leftIdx + 1];
+    totalB += data[leftIdx + 2];
+
+    // Right edge (x=width-1)
+    const rightIdx = (y * width + (width - 1)) * channels;
+    totalR += data[rightIdx];
+    totalG += data[rightIdx + 1];
+    totalB += data[rightIdx + 2];
+  }
+  pixelCount += (height - 2) * 2;
+
+  return {
+    r: Math.round(totalR / pixelCount),
+    g: Math.round(totalG / pixelCount),
+    b: Math.round(totalB / pixelCount),
+  };
+}
+
+/**
+ * Processes an image to create a foreground and extract the average edge color.
  */
 async function processImage(
   imagePath: string,
-  pinDiameter: number
-): Promise<Buffer> {
-  // Read and process the image
+  pinDiameter: number,
+  fill: boolean
+): Promise<{ foreground: Buffer; edgeColor?: { r: number; g: number; b: number } }> {
   const image = sharp(imagePath);
-  const metadata = await image.metadata();
-  
-  if (!metadata.width || !metadata.height) {
-    throw new Error(`Could not read image dimensions: ${imagePath}`);
-  }
-  
-  // Convert pin diameter from points to pixels (assuming 72 DPI for PDF)
-  // We'll use 2x resolution for better quality
-  const targetSize = Math.round(pinDiameter * 2);
-  
-  // Resize image to fit within a square (targetSize x targetSize)
-  // using 'contain' to ensure the entire image fits without cropping
-  // This will add transparent padding if the image is not square
-  const processedBuffer = await image
-    .resize(targetSize, targetSize, {
+
+  // Extract the average edge color
+  const edgeColor = fill ? await extractEdgeColor(image) : undefined;
+
+  // Create the foreground image with a transparent background
+  const foreground = await image
+    .clone()
+    .resize(Math.round(pinDiameter), Math.round(pinDiameter), {
       fit: 'contain',
-      background: { r: 255, g: 255, b: 255, alpha: 1 }, // white background
-      position: 'center',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
     })
     .png()
     .toBuffer();
-  
-  return processedBuffer;
+
+  return { foreground, edgeColor };
 }
 
 /**
- * Draw a circular clipped image on the PDF
- * @param imageDiameter - The actual pin size (32mm or 58mm)
- * @param circleDiameter - The cutting circle size (43mm or 70mm)
+ * Draws a circular image with a solid color background.
  */
 function drawCircularImage(
   doc: PDFKit.PDFDocument,
-  imageBuffer: Buffer,
+  foregroundBuffer: Buffer,
+  edgeColor: { r: number; g: number; b: number } | undefined,
   x: number,
   y: number,
-  imageDiameter: number,
+  pinDiameter: number,
   circleDiameter: number
 ): void {
-  const imageRadius = imageDiameter / 2;
   const circleRadius = circleDiameter / 2;
-  
-  // Save the current graphics state
+  const pinRadius = pinDiameter / 2;
+
   doc.save();
   
-  // Create circular clipping path for the image (at pin size)
-  doc.circle(x, y, imageRadius).clip();
-  
-  // Draw the image centered, sized to pin diameter
-  doc.image(imageBuffer, x - imageRadius, y - imageRadius, {
-    width: imageDiameter,
-    height: imageDiameter,
+  if (edgeColor) {
+    const hexColor = `#${edgeColor.r.toString(16).padStart(2, '0')}${edgeColor.g.toString(16).padStart(2, '0')}${edgeColor.b.toString(16).padStart(2, '0')}`;
+    // Draw the solid color background circle
+    doc.circle(x, y, circleRadius).fill(hexColor);
+  }
+
+  // Draw the foreground image on top, centered and sized to the pin diameter
+  doc.image(foregroundBuffer, x - pinRadius, y - pinRadius, {
+    width: pinDiameter,
+    height: pinDiameter,
   });
-  
-  // Restore graphics state
-  doc.restore();
-  
-  // Draw cutting circle outline (larger circle for bending paper)
+
+  // Draw the cutting outline
   doc.circle(x, y, circleRadius).stroke();
+  
+  doc.restore();
 }
 
 /**
- * Create image distribution array - which image index goes in which circle
- * If fewer images than circles: distributes images evenly with duplication
- * If more images than circles: uses each image once (no duplication)
+ * Create image distribution array.
  */
 function createImageDistribution(imageCount: number, totalCircles: number): number[] {
   const distribution: number[] = [];
-  
   if (imageCount <= totalCircles) {
-    // Duplicate images to fill all circles
     const copiesPerImage = Math.floor(totalCircles / imageCount);
     const remainder = totalCircles % imageCount;
-    
-    // Distribute images evenly
     for (let imageIdx = 0; imageIdx < imageCount; imageIdx++) {
-      // Each image gets copiesPerImage copies, plus one extra for the first 'remainder' images
       const copies = copiesPerImage + (imageIdx < remainder ? 1 : 0);
       for (let copy = 0; copy < copies; copy++) {
         distribution.push(imageIdx);
       }
     }
   } else {
-    // More images than circles: use each image once, no duplication
     for (let i = 0; i < totalCircles; i++) {
       distribution.push(i);
     }
   }
-  
   return distribution;
 }
 
 /**
- * Generate PDF with images in circles
+ * Generate PDF with images in circles.
  */
 export async function generatePinPDF(
   imagePaths: string[],
   outputPath: string,
-  pinSize: PinSize
+  pinSize: PinSize,
+  fill: boolean
 ): Promise<void> {
   const config: PinConfig = PIN_CONFIGS[pinSize];
-  
-  // Calculate total circles needed
-  // If we have more images than circlesPerPage, we need multiple pages
   const totalCircles = Math.max(imagePaths.length, config.circlesPerPage);
   const positions = calculateLayout(totalCircles, config);
   const totalPages = getTotalPages(positions);
-  
-  // Create image distribution array (which image goes in which circle)
   const imageDistribution = createImageDistribution(imagePaths.length, totalCircles);
-  
-  console.log(`Processing ${imagePaths.length} unique image${imagePaths.length !== 1 ? 's' : ''}...`);
+
+  console.log(`Processing ${imagePaths.length} unique image(s)...`);
   console.log(`Pin size: ${config.pinSize}mm (circle: ${config.circleSize}mm)`);
-  console.log(`Layout: ${totalCircles} circles on ${totalPages} page${totalPages !== 1 ? 's' : ''} (${config.circlesPerPage} per page)`);
-  
-  // Display duplication info
+  console.log(`Layout: ${totalCircles} circles on ${totalPages} page(s) (${config.circlesPerPage} per page)`);
+
   if (imagePaths.length < config.circlesPerPage) {
     const copiesPerImage = Math.floor(totalCircles / imagePaths.length);
     const imagesWithExtra = totalCircles % imagePaths.length;
-    
     if (imagesWithExtra === 0) {
       console.log(`Each image will be duplicated ${copiesPerImage} times`);
     } else {
-      console.log(`${imagesWithExtra} image${imagesWithExtra !== 1 ? 's' : ''} duplicated ${copiesPerImage + 1} times, ${imagePaths.length - imagesWithExtra} duplicated ${copiesPerImage} times`);
+      console.log(`${imagesWithExtra} image(s) duplicated ${copiesPerImage + 1} times, ${imagePaths.length - imagesWithExtra} duplicated ${copiesPerImage} times`);
     }
-  } else if (imagePaths.length > config.circlesPerPage) {
-    console.log(`Multiple pages needed: ${config.circlesPerPage} circles per page`);
   }
-  
-  // Process all unique images first (size to pin diameter, not circle diameter)
-  const processedImages: Buffer[] = [];
+
+  const processedImages: Array<{ foreground: Buffer; edgeColor?: { r: number; g: number; b: number } }> = [];
   for (let i = 0; i < imagePaths.length; i++) {
     console.log(`Processing image ${i + 1}/${imagePaths.length}: ${imagePaths[i]}`);
-    const buffer = await processImage(imagePaths[i], config.pinSizePt);
-    processedImages.push(buffer);
+    const result = await processImage(imagePaths[i], config.pinSizePt, fill);
+    processedImages.push(result);
   }
-  
-  // Create PDF
-  const doc = new PDFDocument({
-    size: 'A4',
-    margin: 0,
-    autoFirstPage: false,
-  });
-  
-  // Pipe to file
+
+  const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false });
   const stream = fs.createWriteStream(outputPath);
   doc.pipe(stream);
-  
-  // Draw circles on pages
+
   let currentPage = -1;
-  
   for (let circleIdx = 0; circleIdx < totalCircles; circleIdx++) {
     const position = positions[circleIdx];
     const imageIdx = imageDistribution[circleIdx];
     
-    // Add new page if needed
     if (position.page !== currentPage) {
-      doc.addPage({
-        size: 'A4',
-        margin: 0,
-      });
+      doc.addPage({ size: 'A4', margin: 0 });
       currentPage = position.page;
       console.log(`Generating page ${currentPage + 1}/${totalPages}...`);
     }
     
-    // Draw the circular image (image at pin size, circle at cutting size)
     drawCircularImage(
       doc,
-      processedImages[imageIdx],
+      processedImages[imageIdx].foreground,
+      fill ? processedImages[imageIdx].edgeColor : undefined,
       position.x,
       position.y,
       config.pinSizePt,
       config.circleSizePt
     );
   }
-  
-  // Finalize PDF
+
   doc.end();
-  
-  // Wait for stream to finish
   await new Promise<void>((resolve, reject) => {
     stream.on('finish', resolve);
     stream.on('error', reject);
   });
-  
+
   console.log(`✓ PDF generated: ${outputPath}`);
 }
