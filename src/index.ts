@@ -70,9 +70,8 @@ program
   .argument('[images...]', 'Input image files (omit to generate blank template)')
   .option('-s, --size <size>', 'Pin size: 32mm or 58mm', '32mm')
   .option('-o, --output <file>', 'Output PDF file', 'pins.pdf')
-  .option('-f, --fill', 'Fill background with average edge color', false)
   .option('-d, --duplicate', 'Duplicate images to fill page (20 for 32mm, 6 for 58mm)', false)
-  .option('--background-color <color>', 'Background color for pins (hex, rgb, or named color)', '')
+  .option('--background-color [color]', 'Background color for pins (hex, rgb, or named color). If no color specified, uses average edge color from image')
   .option('--border-color <color>', 'Border color (hex, rgb, or named color)', '')
   .option('--border-width <mm>', 'Border width in mm, extending inward from pin edge', '0')
   .option('--text-position <position>', 'Text position: top, center, bottom', 'bottom')
@@ -138,15 +137,22 @@ program
         process.exit(1);
       }
       
+      // Determine if we should fill with edge color
+      // If --background-color is provided without a value, it will be true
+      // If --background-color has a value, it will be that color string
+      // If --background-color is not provided, it will be undefined
+      const fillWithEdgeColor = options.backgroundColor === true;
+      const backgroundColor = typeof options.backgroundColor === 'string' ? options.backgroundColor : '';
+      
       // Generate PDF
       console.log('\n🎨 Pin Maker PDF Generator\n');
       await generatePinPDF(
         images || [], 
         outputPath, 
         pinSize, 
-        options.fill, 
+        fillWithEdgeColor, 
         options.duplicate,
-        options.backgroundColor,
+        backgroundColor,
         options.borderColor,
         borderWidth,
         textPins,

@@ -43,12 +43,11 @@ pinmaker <images...> [options]
 - `-s, --size <size>`: Pin size (`32mm` or `58mm`, default: `32mm`)
 - `-o, --output <file>`: Output PDF file (default: `pins.pdf`)
 - `-d, --duplicate`: Duplicate images to fill page (20 for 32mm, 6 for 58mm)
-- `-f, --fill`: Fill background with average edge color
 - `-V, --version`: Show version number
 - `-h, --help`: Display help information
 
 **Styling Options:**
-- `--background-color <color>`: Background color for pins (hex, rgb, or named color)
+- `--background-color [color]`: Background color for pins (hex, rgb, or named color). If no color specified, uses average edge color from image
 - `--border-color <color>`: Border color (hex, rgb, or named color)
 - `--border-width <mm>`: Border width in mm, extending inward from pin edge (default: `0`)
 
@@ -114,6 +113,11 @@ pinmaker photo.jpg --text "Team" 28 "2025" 20 --text-position top
 **Create pins with borders and background color:**
 ```bash
 pinmaker image.jpg --border-color gold --border-width 2 --background-color navy
+```
+
+**Fill background with average edge color from image:**
+```bash
+pinmaker image.jpg --background-color
 ```
 
 **Use with glob patterns:**
