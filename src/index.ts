@@ -2,15 +2,63 @@
 
 import { Command } from 'commander';
 import { generatePinPDF } from './pdf-generator.js';
-import { PinSize } from './types.js';
+import { PinSize, TextPin } from './types.js';
 import fs from 'fs';
 import path from 'path';
 
 const program = new Command();
 
-// Helper function to collect multiple text values
-function collectText(value: string, previous: string[]): string[] {
-  return previous.concat([value]);
+/**
+ * Parse --text arguments with optional sizes.
+ * Format: --text "string1" [size1] "string2" [size2] --text "string3"
+ * Each --text flag creates one TextPin (array of lines).
+ */
+function parseTextArguments(argv: string[]): TextPin[] {
+  const textPins: TextPin[] = [];
+  let currentPin: TextPin | null = null;
+  
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    
+    if (arg === '--text') {
+      // Save previous pin if it exists
+      if (currentPin && currentPin.length > 0) {
+        textPins.push(currentPin);
+      }
+      // Start a new pin
+      currentPin = [];
+      continue;
+    }
+    
+    // If we're currently building a pin and hit another flag, save and stop
+    if (currentPin !== null && arg.startsWith('-')) {
+      if (currentPin.length > 0) {
+        textPins.push(currentPin);
+      }
+      currentPin = null;
+      continue;
+    }
+    
+    // If we're building a pin, check if this is a string or number
+    if (currentPin !== null) {
+      // Check if it's a number (size for previous line)
+      const asNumber = parseFloat(arg);
+      if (!isNaN(asNumber) && currentPin.length > 0) {
+        // Update the size of the last line we added
+        currentPin[currentPin.length - 1].size = asNumber;
+      } else {
+        // It's a text string, add a new line
+        currentPin.push({ text: arg, size: undefined });
+      }
+    }
+  }
+  
+  // Don't forget the last pin if it exists
+  if (currentPin && currentPin.length > 0) {
+    textPins.push(currentPin);
+  }
+  
+  return textPins;
 }
 
 program
@@ -27,14 +75,17 @@ program
   .option('--background-color <color>', 'Background color for pins (hex, rgb, or named color)', '')
   .option('--border-color <color>', 'Border color (hex, rgb, or named color)', '')
   .option('--border-width <mm>', 'Border width in mm, extending inward from pin edge', '0')
-  .option('--text <string>', 'Text to display on pin (can be specified multiple times)', collectText, [])
   .option('--text-position <position>', 'Text position: top, center, bottom', 'bottom')
   .option('--text-color <color>', 'Text color', 'white')
-  .option('--text-size <number>', 'Font size in points (auto-scale if not specified)', '0')
+  .option('--text-size <number>', 'Default font size in points (auto-scale if not specified)', '0')
   .option('--text-outline <color>', 'Text outline color for better visibility', 'black')
   .option('--text-outline-width <number>', 'Text outline width in points', '2')
+  .allowUnknownOption() // Allow --text to be parsed manually
   .action(async (images: string[], options) => {
     try {
+      // Parse --text arguments manually from process.argv
+      const textPins = parseTextArguments(process.argv.slice(2));
+      
       // Validate pin size
       const pinSize = options.size as PinSize;
       if (pinSize !== '32mm' && pinSize !== '58mm') {
@@ -98,7 +149,7 @@ program
         options.backgroundColor,
         options.borderColor,
         borderWidth,
-        options.text,
+        textPins,
         options.textPosition,
         options.textColor,
         textSize,

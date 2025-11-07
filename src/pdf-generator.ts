@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
 import fs from 'fs';
-import { PinConfig, PinSize, PIN_CONFIGS } from './types.js';
+import { PinConfig, PinSize, PIN_CONFIGS, TextPin } from './types.js';
 import { calculateLayout, getTotalPages } from './layout.js';
 
 /**
@@ -96,10 +96,10 @@ function drawEmptyCircle(
   backgroundColor: string,
   borderColor: string,
   borderWidth: number,
-  text: string,
+  textPin: TextPin,
   textPosition: string,
   textColor: string,
-  textSize: number,
+  defaultTextSize: number,
   textOutline: string,
   textOutlineWidth: number
 ): void {
@@ -133,16 +133,16 @@ function drawEmptyCircle(
   doc.circle(x, y, circleRadius).stroke();
   
   // Draw text overlay if specified
-  if (text) {
+  if (textPin && textPin.length > 0) {
     drawTextOverlay(
       doc,
-      text,
+      textPin,
       x,
       y,
       pinDiameter,
       textPosition,
       textColor,
-      textSize,
+      defaultTextSize,
       textOutline,
       textOutlineWidth
     );
@@ -152,77 +152,96 @@ function drawEmptyCircle(
 }
 
 /**
- * Draws text overlay on a pin.
+ * Draws text overlay on a pin (supports multi-line text).
  */
 function drawTextOverlay(
   doc: PDFKit.PDFDocument,
-  text: string,
+  textPin: TextPin,
   x: number,
   y: number,
   pinDiameter: number,
   position: string,
   textColor: string,
-  textSize: number,
+  defaultTextSize: number,
   textOutline: string,
   textOutlineWidth: number
 ): void {
-  if (!text) return;
+  if (!textPin || textPin.length === 0) return;
   
   const pinRadius = pinDiameter / 2;
   
-  // Auto-calculate text size if not specified (proportional to pin size)
-  const fontSize = textSize > 0 ? textSize : pinDiameter / 8;
+  // Auto-calculate default text size if not specified (proportional to pin size)
+  const autoSize = defaultTextSize > 0 ? defaultTextSize : pinDiameter / 8;
+  
+  // Calculate font sizes for each line
+  const lineSizes = textPin.map(line => line.size || autoSize);
+  
+  // Line height is 1.2x the font size (standard typography)
+  const lineHeights = lineSizes.map(size => size * 1.2);
+  
+  // Calculate total height of all lines
+  const totalHeight = lineHeights.reduce((sum, height) => sum + height, 0);
   
   // Calculate vertical position based on position option
-  let textY = y;
+  let startY = y;
   if (position === 'top') {
-    textY = y - pinRadius * 0.6;
+    startY = y - pinRadius * 0.6 - totalHeight / 2;
   } else if (position === 'center') {
-    textY = y;
+    startY = y - totalHeight / 2;
   } else { // bottom
-    textY = y + pinRadius * 0.6;
+    startY = y + pinRadius * 0.6 - totalHeight / 2;
   }
   
   doc.save();
-  
-  // Set font
-  doc.fontSize(fontSize);
   doc.font('Helvetica-Bold');
   
-  // Measure text width
-  const textWidth = doc.widthOfString(text);
-  const textX = x - textWidth / 2;
-  
-  // Draw text outline (stroke) first for visibility
-  if (textOutline && textOutlineWidth > 0) {
-    doc.fillColor(textOutline);
-    doc.lineWidth(textOutlineWidth);
-    doc.strokeColor(textOutline);
+  // Draw each line
+  let currentY = startY;
+  for (let i = 0; i < textPin.length; i++) {
+    const line = textPin[i];
+    const fontSize = lineSizes[i];
+    const lineHeight = lineHeights[i];
     
-    // Draw multiple offsets to create outline effect
-    const offsets = [
-      [-textOutlineWidth, -textOutlineWidth],
-      [textOutlineWidth, -textOutlineWidth],
-      [-textOutlineWidth, textOutlineWidth],
-      [textOutlineWidth, textOutlineWidth],
-      [0, -textOutlineWidth],
-      [0, textOutlineWidth],
-      [-textOutlineWidth, 0],
-      [textOutlineWidth, 0]
-    ];
+    doc.fontSize(fontSize);
     
-    for (const [offsetX, offsetY] of offsets) {
-      doc.text(text, textX + offsetX, textY - fontSize / 2 + offsetY, {
-        lineBreak: false
-      });
+    // Measure text width
+    const textWidth = doc.widthOfString(line.text);
+    const textX = x - textWidth / 2;
+    
+    // Draw text outline (stroke) first for visibility
+    if (textOutline && textOutlineWidth > 0) {
+      doc.fillColor(textOutline);
+      doc.lineWidth(textOutlineWidth);
+      doc.strokeColor(textOutline);
+      
+      // Draw multiple offsets to create outline effect
+      const offsets = [
+        [-textOutlineWidth, -textOutlineWidth],
+        [textOutlineWidth, -textOutlineWidth],
+        [-textOutlineWidth, textOutlineWidth],
+        [textOutlineWidth, textOutlineWidth],
+        [0, -textOutlineWidth],
+        [0, textOutlineWidth],
+        [-textOutlineWidth, 0],
+        [textOutlineWidth, 0]
+      ];
+      
+      for (const [offsetX, offsetY] of offsets) {
+        doc.text(line.text, textX + offsetX, currentY + offsetY, {
+          lineBreak: false
+        });
+      }
     }
+    
+    // Draw the main text on top
+    doc.fillColor(textColor);
+    doc.text(line.text, textX, currentY, {
+      lineBreak: false
+    });
+    
+    // Move to next line
+    currentY += lineHeight;
   }
-  
-  // Draw the main text on top
-  doc.fillColor(textColor);
-  doc.text(text, textX, textY - fontSize / 2, {
-    lineBreak: false
-  });
   
   doc.restore();
 }
@@ -241,10 +260,10 @@ function drawCircularImage(
   backgroundColor: string,
   borderColor: string,
   borderWidth: number,
-  text: string,
+  textPin: TextPin,
   textPosition: string,
   textColor: string,
-  textSize: number,
+  defaultTextSize: number,
   textOutline: string,
   textOutlineWidth: number
 ): void {
@@ -296,13 +315,13 @@ function drawCircularImage(
   // Draw text overlay if specified
   drawTextOverlay(
     doc,
-    text,
+    textPin,
     x,
     y,
     pinDiameter,
     textPosition,
     textColor,
-    textSize,
+    defaultTextSize,
     textOutline,
     textOutlineWidth
   );
@@ -344,10 +363,10 @@ export async function generatePinPDF(
   backgroundColor: string,
   borderColor: string,
   borderWidth: number,
-  texts: string[],
+  textPins: TextPin[],
   textPosition: string,
   textColor: string,
-  textSize: number,
+  defaultTextSize: number,
   textOutline: string,
   textOutlineWidth: number
 ): Promise<void> {
@@ -355,22 +374,22 @@ export async function generatePinPDF(
   
   // If no images provided, generate a template with empty circles
   if (imagePaths.length === 0) {
-    // If texts are provided without images, render them on blank circles
-    const hasTexts = texts.length > 0;
-    const totalCircles = (hasTexts && duplicate) 
-      ? Math.max(texts.length, config.circlesPerPage) 
-      : hasTexts 
-        ? texts.length 
+    // If textPins are provided without images, render them on blank circles
+    const hasTextPins = textPins.length > 0;
+    const totalCircles = (hasTextPins && duplicate) 
+      ? Math.max(textPins.length, config.circlesPerPage) 
+      : hasTextPins 
+        ? textPins.length 
         : config.circlesPerPage;
     
-    console.log(hasTexts ? 'Generating pins with text on blank templates...' : 'Generating blank template...');
+    console.log(hasTextPins ? 'Generating pins with text on blank templates...' : 'Generating blank template...');
     console.log(`Pin size: ${config.pinSize}mm (circle: ${config.circleSize}mm)`);
     const totalPages = getTotalPages(calculateLayout(totalCircles, config));
     console.log(`Layout: ${totalCircles} circles on ${totalPages} page(s) (${config.circlesPerPage} per page)`);
     
     // Create text distribution if duplicating
-    const textDistribution = duplicate && hasTexts 
-      ? createImageDistribution(texts.length, totalCircles)
+    const textDistribution = duplicate && hasTextPins 
+      ? createImageDistribution(textPins.length, totalCircles)
       : Array.from({ length: totalCircles }, (_, i) => i);
     
     const positions = calculateLayout(totalCircles, config);
@@ -398,10 +417,10 @@ export async function generatePinPDF(
         backgroundColor,
         borderColor,
         borderWidth * 2.83465, // Convert mm to points
-        texts[textIdx] || '', // Get text for this circle using distribution, or empty string
+        textPins[textIdx] || [], // Get textPin for this circle using distribution, or empty array
         textPosition,
         textColor,
-        textSize,
+        defaultTextSize,
         textOutline,
         textOutlineWidth
       );
@@ -425,9 +444,9 @@ export async function generatePinPDF(
     ? createImageDistribution(imagePaths.length, totalCircles)
     : imagePaths.map((_, idx) => idx); // One-to-one mapping when not duplicating
   
-  // Create text distribution - distribute texts across all circles
-  const textDistribution = texts.length > 0
-    ? createImageDistribution(texts.length, totalCircles)
+  // Create text distribution - distribute textPins across all circles
+  const textDistribution = textPins.length > 0
+    ? createImageDistribution(textPins.length, totalCircles)
     : Array.from({ length: totalCircles }, (_, i) => i);
 
   console.log(`Processing ${imagePaths.length} unique image(s)...`);
@@ -478,10 +497,10 @@ export async function generatePinPDF(
       backgroundColor,
       borderColor,
       borderWidth * 2.83465, // Convert mm to points
-      texts[textIdx] || '', // Get text using distribution, or empty string
+      textPins[textIdx] || [], // Get textPin using distribution, or empty array
       textPosition,
       textColor,
-      textSize,
+      defaultTextSize,
       textOutline,
       textOutlineWidth
     );

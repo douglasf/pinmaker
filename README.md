@@ -53,10 +53,14 @@ pinmaker <images...> [options]
 - `--border-width <mm>`: Border width in mm, extending inward from pin edge (default: `0`)
 
 **Text Options:**
-- `--text <string>`: Text to display on pin (can be specified multiple times)
+- `--text <string> [size] [string] [size]...`: Text to display on pin (can be specified multiple times)
+  - Each `--text` flag creates one pin with one or more lines
+  - Follow each string with an optional number to set that line's font size in points
+  - Lines without a size will auto-scale based on pin diameter
+  - Multiple `--text` flags create multiple text pins
 - `--text-position <position>`: Text position: `top`, `center`, or `bottom` (default: `bottom`)
 - `--text-color <color>`: Text color (default: `white`)
-- `--text-size <number>`: Font size in points (auto-scales if not specified)
+- `--text-size <number>`: Default font size in points for lines without individual sizes (auto-scales if not specified)
 - `--text-outline <color>`: Text outline color for better visibility (default: `black`)
 - `--text-outline-width <number>`: Text outline width in points (default: `2`)
 
@@ -87,6 +91,26 @@ pinmaker --text "Hello" --text "World" --text-color blue
 pinmaker photo.jpg --text "Team Name" --text-position top --text-color white
 ```
 
+**Multi-line text on a single pin:**
+```bash
+pinmaker --text "Line 1" "Line 2" "Line 3"
+```
+
+**Multi-line text with individual font sizes:**
+```bash
+pinmaker --text "HEADING" 30 "Subtitle" 18 "Details" 12
+```
+
+**Multiple pins with different multi-line text:**
+```bash
+pinmaker --text "First" 24 "Pin" 16 --text "Second" 24 "Pin" 16
+```
+
+**Combine multi-line text with images:**
+```bash
+pinmaker photo.jpg --text "Team" 28 "2025" 20 --text-position top
+```
+
 **Create pins with borders and background color:**
 ```bash
 pinmaker image.jpg --border-color gold --border-width 2 --background-color navy
@@ -111,6 +135,54 @@ pinmaker ~/Documents/photos/*.png -o pins.pdf
 | 58mm     | 58mm           | 70mm           | 6               | 2 × 3   |
 
 The image is sized to match the actual pin diameter (32mm or 58mm). The larger cutting circle (43mm or 70mm) provides extra space needed for the paper to bend around the pin frame in the pin-making machine.
+
+## Multi-Line Text Feature
+
+The `--text` option supports multiple lines on a single pin with individual font sizes for each line.
+
+**Syntax:**
+```bash
+--text "line1" [size1] "line2" [size2] ...
+```
+
+**How it works:**
+- Each `--text` flag creates **one pin** with one or more text lines
+- Place a **number after a string** to set that line's font size in points
+- Lines **without a size** will auto-scale based on the pin diameter
+- Use **multiple `--text` flags** to create multiple different text pins
+- Lines are **centered as a group** and stacked with 1.2x line height spacing
+
+**Examples:**
+
+Single line (backward compatible):
+```bash
+--text "Hello World"
+```
+
+Three lines with auto-sizing:
+```bash
+--text "Line 1" "Line 2" "Line 3"
+```
+
+Custom sizes for each line:
+```bash
+--text "BIG TITLE" 32 "Smaller subtitle" 18 "tiny details" 10
+```
+
+Mix custom and auto-sized lines:
+```bash
+--text "EVENT NAME" 28 "Date and Location"
+```
+
+Create multiple different pins:
+```bash
+--text "Alice" 24 "Developer" 14 --text "Bob" 24 "Designer" 14
+```
+
+Combine with images and positioning:
+```bash
+pinmaker team-photo.jpg --text "TEAM" 30 "Champions 2025" 16 --text-position top
+```
 
 ### Image Distribution
 

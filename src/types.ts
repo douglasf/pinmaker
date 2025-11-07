@@ -45,3 +45,11 @@ export const A4_PAGE: LayoutConfig = {
   margin: 28.35, // 10mm margin
   spacing: 14.17, // 5mm spacing between circles
 };
+
+// Text configuration types
+export interface TextLine {
+  text: string;
+  size?: number; // Optional size override for this line in points
+}
+
+export type TextPin = TextLine[]; // One pin can have multiple lines of text
