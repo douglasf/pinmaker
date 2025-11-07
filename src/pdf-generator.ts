@@ -113,7 +113,9 @@ function drawCircularImage(
   x: number,
   y: number,
   pinDiameter: number,
-  circleDiameter: number
+  circleDiameter: number,
+  borderColor: string,
+  borderWidth: number
 ): void {
   const circleRadius = circleDiameter / 2;
   const pinRadius = pinDiameter / 2;
@@ -124,6 +126,25 @@ function drawCircularImage(
     const hexColor = `#${edgeColor.r.toString(16).padStart(2, '0')}${edgeColor.g.toString(16).padStart(2, '0')}${edgeColor.b.toString(16).padStart(2, '0')}`;
     // Draw the solid color background circle
     doc.circle(x, y, circleRadius).fill(hexColor);
+  }
+
+  // Draw border ring if specified
+  if (borderColor && borderWidth > 0) {
+    // Border starts at (pinDiameter - borderWidth) and extends to circleDiameter
+    const borderInnerRadius = (pinDiameter - borderWidth * 2) / 2;
+    const borderOuterRadius = circleRadius;
+    
+    // Draw the outer circle with border color
+    doc.circle(x, y, borderOuterRadius).fill(borderColor);
+    
+    // Cut out the inner circle to create a ring effect
+    // We do this by drawing a white/transparent circle on top
+    if (edgeColor) {
+      const hexColor = `#${edgeColor.r.toString(16).padStart(2, '0')}${edgeColor.g.toString(16).padStart(2, '0')}${edgeColor.b.toString(16).padStart(2, '0')}`;
+      doc.circle(x, y, borderInnerRadius).fill(hexColor);
+    } else {
+      doc.circle(x, y, borderInnerRadius).fill('white');
+    }
   }
 
   // Draw the foreground image on top, centered and sized to the pin diameter
@@ -168,7 +189,9 @@ export async function generatePinPDF(
   outputPath: string,
   pinSize: PinSize,
   fill: boolean,
-  duplicate: boolean
+  duplicate: boolean,
+  borderColor: string,
+  borderWidth: number
 ): Promise<void> {
   const config: PinConfig = PIN_CONFIGS[pinSize];
   
@@ -252,7 +275,9 @@ export async function generatePinPDF(
       position.x,
       position.y,
       config.pinSizePt,
-      config.circleSizePt
+      config.circleSizePt,
+      borderColor,
+      borderWidth * 2.83465 // Convert mm to points
     );
   }
 

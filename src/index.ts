@@ -19,6 +19,8 @@ program
   .option('-o, --output <file>', 'Output PDF file', 'pins.pdf')
   .option('-f, --fill', 'Fill background with average edge color', false)
   .option('-d, --duplicate', 'Duplicate images to fill page (20 for 32mm, 6 for 58mm)', false)
+  .option('--border-color <color>', 'Border color (hex, rgb, or named color)', '')
+  .option('--border-width <mm>', 'Border width in mm, extending inward from pin edge', '0')
   .action(async (images: string[], options) => {
     try {
       // Validate pin size
@@ -47,9 +49,24 @@ program
       // Resolve output path
       const outputPath = path.resolve(options.output);
       
+      // Parse border width
+      const borderWidth = parseFloat(options.borderWidth);
+      if (isNaN(borderWidth) || borderWidth < 0) {
+        console.error('Error: Border width must be a non-negative number');
+        process.exit(1);
+      }
+      
       // Generate PDF
       console.log('\n🎨 Pin Maker PDF Generator\n');
-      await generatePinPDF(images || [], outputPath, pinSize, options.fill, options.duplicate);
+      await generatePinPDF(
+        images || [], 
+        outputPath, 
+        pinSize, 
+        options.fill, 
+        options.duplicate,
+        options.borderColor,
+        borderWidth
+      );
       console.log('\n✨ Done!\n');
       
     } catch (error) {
