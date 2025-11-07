@@ -18,6 +18,7 @@ program
   .option('-s, --size <size>', 'Pin size: 32mm or 58mm', '32mm')
   .option('-o, --output <file>', 'Output PDF file', 'pins.pdf')
   .option('-f, --fill', 'Fill background with average edge color', false)
+  .option('-d, --duplicate', 'Duplicate images to fill page (20 for 32mm, 6 for 58mm)', false)
   .action(async (images: string[], options) => {
     try {
       // Validate pin size
@@ -48,7 +49,7 @@ program
       
       // Generate PDF
       console.log('\n🎨 Pin Maker PDF Generator\n');
-      await generatePinPDF(images || [], outputPath, pinSize, options.fill);
+      await generatePinPDF(images || [], outputPath, pinSize, options.fill, options.duplicate);
       console.log('\n✨ Done!\n');
       
     } catch (error) {

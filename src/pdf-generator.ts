@@ -167,7 +167,8 @@ export async function generatePinPDF(
   imagePaths: string[],
   outputPath: string,
   pinSize: PinSize,
-  fill: boolean
+  fill: boolean,
+  duplicate: boolean
 ): Promise<void> {
   const config: PinConfig = PIN_CONFIGS[pinSize];
   
@@ -200,16 +201,19 @@ export async function generatePinPDF(
     return;
   }
   
-  const totalCircles = Math.max(imagePaths.length, config.circlesPerPage);
+  // Calculate total circles based on duplicate flag
+  const totalCircles = duplicate ? Math.max(imagePaths.length, config.circlesPerPage) : imagePaths.length;
   const positions = calculateLayout(totalCircles, config);
   const totalPages = getTotalPages(positions);
-  const imageDistribution = createImageDistribution(imagePaths.length, totalCircles);
+  const imageDistribution = duplicate 
+    ? createImageDistribution(imagePaths.length, totalCircles)
+    : imagePaths.map((_, idx) => idx); // One-to-one mapping when not duplicating
 
   console.log(`Processing ${imagePaths.length} unique image(s)...`);
   console.log(`Pin size: ${config.pinSize}mm (circle: ${config.circleSize}mm)`);
   console.log(`Layout: ${totalCircles} circles on ${totalPages} page(s) (${config.circlesPerPage} per page)`);
 
-  if (imagePaths.length < config.circlesPerPage) {
+  if (duplicate && imagePaths.length < config.circlesPerPage) {
     const copiesPerImage = Math.floor(totalCircles / imagePaths.length);
     const imagesWithExtra = totalCircles % imagePaths.length;
     if (imagesWithExtra === 0) {
