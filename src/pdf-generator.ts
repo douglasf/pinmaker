@@ -104,6 +104,82 @@ function drawEmptyCircle(
 }
 
 /**
+ * Draws text overlay on a pin.
+ */
+function drawTextOverlay(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  pinDiameter: number,
+  position: string,
+  textColor: string,
+  textSize: number,
+  textOutline: string,
+  textOutlineWidth: number
+): void {
+  if (!text) return;
+  
+  const pinRadius = pinDiameter / 2;
+  
+  // Auto-calculate text size if not specified (proportional to pin size)
+  const fontSize = textSize > 0 ? textSize : pinDiameter / 8;
+  
+  // Calculate vertical position based on position option
+  let textY = y;
+  if (position === 'top') {
+    textY = y - pinRadius * 0.6;
+  } else if (position === 'center') {
+    textY = y;
+  } else { // bottom
+    textY = y + pinRadius * 0.6;
+  }
+  
+  doc.save();
+  
+  // Set font
+  doc.fontSize(fontSize);
+  doc.font('Helvetica-Bold');
+  
+  // Measure text width
+  const textWidth = doc.widthOfString(text);
+  const textX = x - textWidth / 2;
+  
+  // Draw text outline (stroke) first for visibility
+  if (textOutline && textOutlineWidth > 0) {
+    doc.fillColor(textOutline);
+    doc.lineWidth(textOutlineWidth);
+    doc.strokeColor(textOutline);
+    
+    // Draw multiple offsets to create outline effect
+    const offsets = [
+      [-textOutlineWidth, -textOutlineWidth],
+      [textOutlineWidth, -textOutlineWidth],
+      [-textOutlineWidth, textOutlineWidth],
+      [textOutlineWidth, textOutlineWidth],
+      [0, -textOutlineWidth],
+      [0, textOutlineWidth],
+      [-textOutlineWidth, 0],
+      [textOutlineWidth, 0]
+    ];
+    
+    for (const [offsetX, offsetY] of offsets) {
+      doc.text(text, textX + offsetX, textY - fontSize / 2 + offsetY, {
+        lineBreak: false
+      });
+    }
+  }
+  
+  // Draw the main text on top
+  doc.fillColor(textColor);
+  doc.text(text, textX, textY - fontSize / 2, {
+    lineBreak: false
+  });
+  
+  doc.restore();
+}
+
+/**
  * Draws a circular image with a solid color background.
  */
 function drawCircularImage(
@@ -115,7 +191,13 @@ function drawCircularImage(
   pinDiameter: number,
   circleDiameter: number,
   borderColor: string,
-  borderWidth: number
+  borderWidth: number,
+  text: string,
+  textPosition: string,
+  textColor: string,
+  textSize: number,
+  textOutline: string,
+  textOutlineWidth: number
 ): void {
   const circleRadius = circleDiameter / 2;
   const pinRadius = pinDiameter / 2;
@@ -156,6 +238,20 @@ function drawCircularImage(
   // Draw the cutting outline
   doc.circle(x, y, circleRadius).stroke();
   
+  // Draw text overlay if specified
+  drawTextOverlay(
+    doc,
+    text,
+    x,
+    y,
+    pinDiameter,
+    textPosition,
+    textColor,
+    textSize,
+    textOutline,
+    textOutlineWidth
+  );
+  
   doc.restore();
 }
 
@@ -191,7 +287,13 @@ export async function generatePinPDF(
   fill: boolean,
   duplicate: boolean,
   borderColor: string,
-  borderWidth: number
+  borderWidth: number,
+  texts: string[],
+  textPosition: string,
+  textColor: string,
+  textSize: number,
+  textOutline: string,
+  textOutlineWidth: number
 ): Promise<void> {
   const config: PinConfig = PIN_CONFIGS[pinSize];
   
@@ -277,7 +379,13 @@ export async function generatePinPDF(
       config.pinSizePt,
       config.circleSizePt,
       borderColor,
-      borderWidth * 2.83465 // Convert mm to points
+      borderWidth * 2.83465, // Convert mm to points
+      texts[imageIdx] || '', // Get text for this image index, or empty string
+      textPosition,
+      textColor,
+      textSize,
+      textOutline,
+      textOutlineWidth
     );
   }
 
