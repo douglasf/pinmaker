@@ -357,22 +357,38 @@ export async function generatePinPDF(
   if (imagePaths.length === 0) {
     // If texts are provided without images, render them on blank circles
     const hasTexts = texts.length > 0;
-    const totalCircles = hasTexts ? Math.max(texts.length, config.circlesPerPage) : config.circlesPerPage;
+    const totalCircles = (hasTexts && duplicate) 
+      ? Math.max(texts.length, config.circlesPerPage) 
+      : hasTexts 
+        ? texts.length 
+        : config.circlesPerPage;
     
     console.log(hasTexts ? 'Generating pins with text on blank templates...' : 'Generating blank template...');
     console.log(`Pin size: ${config.pinSize}mm (circle: ${config.circleSize}mm)`);
-    console.log(`Layout: ${totalCircles} circles on 1 page`);
+    const totalPages = getTotalPages(calculateLayout(totalCircles, config));
+    console.log(`Layout: ${totalCircles} circles on ${totalPages} page(s) (${config.circlesPerPage} per page)`);
+    
+    // Create text distribution if duplicating
+    const textDistribution = duplicate && hasTexts 
+      ? createImageDistribution(texts.length, totalCircles)
+      : Array.from({ length: totalCircles }, (_, i) => i);
     
     const positions = calculateLayout(totalCircles, config);
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false });
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
     
-    doc.addPage({ size: 'A4', margin: 0 });
-    console.log('Generating page 1/1...');
-    
+    let currentPage = -1;
     for (let i = 0; i < totalCircles; i++) {
       const position = positions[i];
+      
+      if (position.page !== currentPage) {
+        doc.addPage({ size: 'A4', margin: 0 });
+        currentPage = position.page;
+        console.log(`Generating page ${currentPage + 1}/${totalPages}...`);
+      }
+      
+      const textIdx = textDistribution[i];
       drawEmptyCircle(
         doc, 
         position.x, 
@@ -382,7 +398,7 @@ export async function generatePinPDF(
         backgroundColor,
         borderColor,
         borderWidth * 2.83465, // Convert mm to points
-        texts[i] || '', // Get text for this circle, or empty string
+        texts[textIdx] || '', // Get text for this circle using distribution, or empty string
         textPosition,
         textColor,
         textSize,
@@ -408,6 +424,11 @@ export async function generatePinPDF(
   const imageDistribution = duplicate 
     ? createImageDistribution(imagePaths.length, totalCircles)
     : imagePaths.map((_, idx) => idx); // One-to-one mapping when not duplicating
+  
+  // Create text distribution - distribute texts across all circles
+  const textDistribution = texts.length > 0
+    ? createImageDistribution(texts.length, totalCircles)
+    : Array.from({ length: totalCircles }, (_, i) => i);
 
   console.log(`Processing ${imagePaths.length} unique image(s)...`);
   console.log(`Pin size: ${config.pinSize}mm (circle: ${config.circleSize}mm)`);
@@ -438,6 +459,7 @@ export async function generatePinPDF(
   for (let circleIdx = 0; circleIdx < totalCircles; circleIdx++) {
     const position = positions[circleIdx];
     const imageIdx = imageDistribution[circleIdx];
+    const textIdx = textDistribution[circleIdx];
     
     if (position.page !== currentPage) {
       doc.addPage({ size: 'A4', margin: 0 });
@@ -456,7 +478,7 @@ export async function generatePinPDF(
       backgroundColor,
       borderColor,
       borderWidth * 2.83465, // Convert mm to points
-      texts[imageIdx] || '', // Get text for this image index, or empty string
+      texts[textIdx] || '', // Get text using distribution, or empty string
       textPosition,
       textColor,
       textSize,
