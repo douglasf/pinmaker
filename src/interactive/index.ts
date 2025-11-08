@@ -1,5 +1,5 @@
 import { checkbox, input, select, confirm, editor } from '@inquirer/prompts';
-import { PinSize, TextPin, TextLine } from './types.js';
+import { PinSize, TextPin, TextLine } from '../types/index.js';
 import fs from 'fs';
 import path from 'path';
 import terminalKit from 'terminal-kit';

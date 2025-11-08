@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import sharp from 'sharp';
 import fs from 'fs';
-import { PinConfig, PinSize, PIN_CONFIGS, TextPin } from './types.js';
+import { PinConfig, PinSize, PIN_CONFIGS, TextPin } from '../types/index.js';
 import { calculateLayout, getTotalPages } from './layout.js';
 
 /**

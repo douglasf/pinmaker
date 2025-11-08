@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTextArguments } from './index.js';
+import { parseTextArguments } from '../cli/index.js';
 
 describe('CLI Argument Parsing', () => {
   describe('parseTextArguments', () => {

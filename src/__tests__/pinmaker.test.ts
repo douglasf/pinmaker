@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { generatePinPDF } from './pdf-generator.js';
+import { generatePinPDF } from '../core/pdf-generator.js';
 import { PDFDocument } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';

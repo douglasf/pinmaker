@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateLayout, getTotalPages } from './layout.js';
-import { A4_PAGE, PinConfig } from './types.js';
+import { calculateLayout, getTotalPages } from '../core/layout.js';
+import { A4_PAGE, PinConfig } from '../types/index.js';
 
 describe('Layout Calculations', () => {
   // Common configs for testing

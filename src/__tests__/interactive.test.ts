@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sortImages, filterImages, formatFileSize, ImageFileInfo } from './interactive.js';
+import { sortImages, filterImages, formatFileSize, ImageFileInfo } from '../interactive/index.js';
 
 describe('Interactive Mode Utilities', () => {
   // Sample test data

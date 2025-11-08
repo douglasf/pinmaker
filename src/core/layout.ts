@@ -1,4 +1,4 @@
-import { A4_PAGE, CirclePosition, PinConfig } from './types.js';
+import { A4_PAGE, CirclePosition, PinConfig } from '../types/index.js';
 
 /**
  * Calculate optimal grid layout for a fixed number of circles on a page
