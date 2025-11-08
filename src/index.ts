@@ -13,7 +13,7 @@ import path from 'path';
  * Each --text flag creates one TextPin (array of lines).
  * Returns both parsed pins and indices of consumed arguments.
  */
-function parseTextArguments(argv: string[]): { textPins: TextPin[], consumedIndices: Set<number> } {
+export function parseTextArguments(argv: string[]): { textPins: TextPin[], consumedIndices: Set<number> } {
   const textPins: TextPin[] = [];
   const consumedIndices = new Set<number>();
   let currentPin: TextPin | null = null;

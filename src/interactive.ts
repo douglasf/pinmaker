@@ -25,7 +25,7 @@ export interface InteractiveConfig {
   textOutlineWidth: number;
 }
 
-interface ImageFileInfo {
+export interface ImageFileInfo {
   file: string;
   fileName: string;
   size: number;
@@ -36,7 +36,7 @@ interface ImageFileInfo {
   modifiedTime: number;
 }
 
-type SortOption = 'name' | 'size' | 'dimensions' | 'date';
+export type SortOption = 'name' | 'size' | 'dimensions' | 'date';
 
 /**
  * Get list of image files in the current directory
@@ -247,9 +247,9 @@ async function showImagePreview(imagePath: string, size: { width: number; height
 }
 
 /**
- * Sort images by specified criterion
+ * Sort images by different criteria
  */
-function sortImages(images: ImageFileInfo[], sortBy: SortOption): ImageFileInfo[] {
+export function sortImages(images: ImageFileInfo[], sortBy: SortOption): ImageFileInfo[] {
   const sorted = [...images];
   switch (sortBy) {
     case 'name':
@@ -268,7 +268,7 @@ function sortImages(images: ImageFileInfo[], sortBy: SortOption): ImageFileInfo[
 /**
  * Filter images based on search query
  */
-function filterImages(images: ImageFileInfo[], query: string): ImageFileInfo[] {
+export function filterImages(images: ImageFileInfo[], query: string): ImageFileInfo[] {
   if (!query.trim()) return images;
   const lowerQuery = query.toLowerCase();
   return images.filter(img => 
@@ -280,7 +280,7 @@ function filterImages(images: ImageFileInfo[], query: string): ImageFileInfo[] {
 /**
  * Format file size in human-readable format
  */
-function formatFileSize(bytes: number): string {
+export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
