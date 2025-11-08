@@ -3,10 +3,9 @@
 import { Command } from 'commander';
 import { generatePinPDF } from './pdf-generator.js';
 import { PinSize, TextPin } from './types.js';
+import { runInteractiveMode } from './interactive.js';
 import fs from 'fs';
 import path from 'path';
-
-const program = new Command();
 
 /**
  * Parse --text arguments with optional sizes.
@@ -61,26 +60,64 @@ function parseTextArguments(argv: string[]): TextPin[] {
   return textPins;
 }
 
-program
-  .name('pinmaker')
-  .description('Generate PDFs with images in circles for pin making')
-  .version('1.0.0');
+// Check if running in interactive mode (no arguments except possibly node and script path)
+const isInteractiveMode = process.argv.length === 2 || 
+  (process.argv.length === 3 && process.argv[2] === 'interactive');
 
-program
-  .argument('[images...]', 'Input image files (omit to generate blank template)')
-  .option('-s, --size <size>', 'Pin size: 32mm or 58mm', '32mm')
-  .option('-o, --output <file>', 'Output PDF file', 'pins.pdf')
-  .option('-d, --duplicate', 'Duplicate images to fill page (20 for 32mm, 6 for 58mm)', false)
-  .option('--background-color [color]', 'Background color for pins (hex, rgb, or named color). If no color specified, uses average edge color from image')
-  .option('--border-color <color>', 'Border color (hex, rgb, or named color)', '')
-  .option('--border-width <mm>', 'Border width in mm, extending inward from pin edge', '0')
-  .option('--text-position <position>', 'Text position: top, center, bottom', 'bottom')
-  .option('--text-color <color>', 'Text color', 'white')
-  .option('--text-size <number>', 'Default font size in points (auto-scale if not specified)', '0')
-  .option('--text-outline <color>', 'Text outline color for better visibility', 'black')
-  .option('--text-outline-width <number>', 'Text outline width in points', '2')
-  .allowUnknownOption() // Allow --text to be parsed manually
-  .action(async (images: string[], options) => {
+if (isInteractiveMode) {
+  // Run interactive mode
+  (async () => {
+    try {
+      const config = await runInteractiveMode();
+      
+      // Generate PDF with the config from interactive mode
+      await generatePinPDF(
+        config.images,
+        path.resolve(config.output),
+        config.size,
+        config.fillWithEdgeColor,
+        config.duplicate,
+        config.backgroundColor,
+        config.borderColor,
+        config.borderWidth,
+        config.textPins,
+        config.textPosition,
+        config.textColor,
+        config.textSize,
+        config.textOutline,
+        config.textOutlineWidth
+      );
+      
+      console.log('\n✨ Done!\n');
+    } catch (error) {
+      console.error('\n❌ Error:', error instanceof Error ? error.message : error);
+      process.exit(1);
+    }
+  })();
+} else {
+  // Run CLI mode with commander
+  const program = new Command();
+
+  program
+    .name('pinmaker')
+    .description('Generate PDFs with images in circles for pin making')
+    .version('1.0.0');
+
+  program
+    .argument('[images...]', 'Input image files (omit to generate blank template)')
+    .option('-s, --size <size>', 'Pin size: 32mm or 58mm', '32mm')
+    .option('-o, --output <file>', 'Output PDF file', 'pins.pdf')
+    .option('-d, --duplicate', 'Duplicate images to fill page (20 for 32mm, 6 for 58mm)', false)
+    .option('--background-color [color]', 'Background color for pins (hex, rgb, or named color). If no color specified, uses average edge color from image')
+    .option('--border-color <color>', 'Border color (hex, rgb, or named color)', '')
+    .option('--border-width <mm>', 'Border width in mm, extending inward from pin edge', '0')
+    .option('--text-position <position>', 'Text position: top, center, bottom', 'bottom')
+    .option('--text-color <color>', 'Text color', 'white')
+    .option('--text-size <number>', 'Default font size in points (auto-scale if not specified)', '0')
+    .option('--text-outline <color>', 'Text outline color for better visibility', 'black')
+    .option('--text-outline-width <number>', 'Text outline width in points', '2')
+    .allowUnknownOption() // Allow --text to be parsed manually
+    .action(async (images: string[], options) => {
     try {
       // Parse --text arguments manually from process.argv
       const textPins = parseTextArguments(process.argv.slice(2));
@@ -170,4 +207,5 @@ program
     }
   });
 
-program.parse();
+  program.parse();
+}

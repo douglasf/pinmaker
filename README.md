@@ -4,6 +4,7 @@ A CLI tool to create PDFs with images arranged in circles for making pins/badges
 
 ## Features
 
+- **Interactive Mode:** Run `pinmaker` without arguments for a user-friendly interactive TUI with image previews (Kitty graphics protocol supported)
 - **Two pin sizes supported:**
   - 32mm pins → 20 circles per page (4 columns × 5 rows)
   - 58mm pins → 6 circles per page (2 columns × 3 rows)
@@ -32,6 +33,26 @@ npm link
 Now you can use `pinmaker` from anywhere!
 
 ## Usage
+
+### Interactive Mode (Recommended)
+
+Run `pinmaker` without any arguments to enter interactive mode:
+
+```bash
+pinmaker
+```
+
+This launches a user-friendly TUI that guides you through:
+- Selecting images with checkbox controls
+- Image previews (in Kitty, WezTerm, iTerm2 terminals)
+- Configuring all options step-by-step
+- Review summary before generating
+
+See [INTERACTIVE_MODE.md](./INTERACTIVE_MODE.md) for detailed guide.
+
+### CLI Mode
+
+For scripting and automation, use the traditional CLI:
 
 ```bash
 pinmaker <images...> [options]
