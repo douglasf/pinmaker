@@ -11,15 +11,18 @@ import path from 'path';
  * Parse --text arguments with optional sizes.
  * Format: --text "string1" [size1] "string2" [size2] --text "string3"
  * Each --text flag creates one TextPin (array of lines).
+ * Returns both parsed pins and indices of consumed arguments.
  */
-function parseTextArguments(argv: string[]): TextPin[] {
+function parseTextArguments(argv: string[]): { textPins: TextPin[], consumedIndices: Set<number> } {
   const textPins: TextPin[] = [];
+  const consumedIndices = new Set<number>();
   let currentPin: TextPin | null = null;
   
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     
     if (arg === '--text') {
+      consumedIndices.add(i);
       // Save previous pin if it exists
       if (currentPin && currentPin.length > 0) {
         textPins.push(currentPin);
@@ -40,6 +43,7 @@ function parseTextArguments(argv: string[]): TextPin[] {
     
     // If we're building a pin, check if this is a string or number
     if (currentPin !== null) {
+      consumedIndices.add(i);
       // Check if it's a number (size for previous line)
       const asNumber = parseFloat(arg);
       if (!isNaN(asNumber) && currentPin.length > 0) {
@@ -57,7 +61,7 @@ function parseTextArguments(argv: string[]): TextPin[] {
     textPins.push(currentPin);
   }
   
-  return textPins;
+  return { textPins, consumedIndices };
 }
 
 // Check if running in interactive mode (no arguments except possibly node and script path)
@@ -120,7 +124,17 @@ if (isInteractiveMode) {
     .action(async (images: string[], options) => {
     try {
       // Parse --text arguments manually from process.argv
-      const textPins = parseTextArguments(process.argv.slice(2));
+      const { textPins, consumedIndices } = parseTextArguments(process.argv.slice(2));
+      
+      // Filter out --text and its arguments from images array
+      // Commander incorrectly captures them as image arguments
+      const processedArgs = process.argv.slice(2);
+      const filteredImages = images.filter((img, idx) => {
+        // Find the actual index in process.argv
+        // We need to account for the fact that commander may have reordered things
+        const argIndex = processedArgs.indexOf(img);
+        return argIndex === -1 || !consumedIndices.has(argIndex);
+      });
       
       // Validate pin size
       const pinSize = options.size as PinSize;
@@ -130,9 +144,9 @@ if (isInteractiveMode) {
       }
       
       // Validate image files exist (if any provided)
-      if (images && images.length > 0) {
+      if (filteredImages && filteredImages.length > 0) {
         const missingFiles: string[] = [];
-        for (const imagePath of images) {
+        for (const imagePath of filteredImages) {
           if (!fs.existsSync(imagePath)) {
             missingFiles.push(imagePath);
           }
@@ -184,7 +198,7 @@ if (isInteractiveMode) {
       // Generate PDF
       console.log('\n🎨 Pin Maker PDF Generator\n');
       await generatePinPDF(
-        images || [], 
+        filteredImages || [], 
         outputPath, 
         pinSize, 
         fillWithEdgeColor, 
