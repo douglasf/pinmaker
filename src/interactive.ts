@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import terminalKit from 'terminal-kit';
 import sharp from 'sharp';
+import { execSync, spawnSync } from 'child_process';
 
 const term = terminalKit.terminal;
 
@@ -90,18 +91,140 @@ async function getImageDimensions(imagePath: string): Promise<{ width: number; h
 }
 
 /**
+ * Find kitten icat executable and check if terminal supports Kitty graphics protocol
+ */
+function findKittenIcat(): string | null {
+  // First check if terminal supports Kitty graphics protocol
+  const term_env = process.env.TERM || '';
+  const term_program = process.env.TERM_PROGRAM || '';
+  
+  // List of terminals known to support Kitty graphics protocol
+  const supportedTerminals = ['kitty', 'ghostty'];
+  const supportsKitty = supportedTerminals.some(t => 
+    term_env.toLowerCase().includes(t) || term_program.toLowerCase().includes(t)
+  );
+  
+  if (!supportsKitty) {
+    return null;
+  }
+  
+  const possiblePaths = [
+    '/Applications/kitty.app/Contents/MacOS/kitten',
+    '/usr/local/bin/kitten',
+    '~/.local/bin/kitten',
+    'kitten'
+  ];
+  
+  for (const kittenPath of possiblePaths) {
+    try {
+      // Try running with --help since --version doesn't exist
+      const { status } = spawnSync(kittenPath, ['icat', '--help'], { stdio: 'pipe' });
+      if (status === 0) {
+        return kittenPath;
+      }
+    } catch {
+      continue;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Display image preview using kitten icat (native Kitty protocol)
+ */
+async function showImageWithKittenIcat(imagePath: string, kittenPath: string, widthCells: number, heightCells: number): Promise<boolean> {
+  try {
+    // Temporarily release input grabbing before spawning kitten
+    term.grabInput(false);
+    
+    // Pre-process image to constrain height while maintaining aspect ratio
+    // Each cell is roughly 8-10 pixels wide and 16-20 pixels tall
+    // Use conservative estimates: 10px per cell width, 20px per cell height
+    const maxWidth = widthCells * 10;
+    const maxHeight = heightCells * 20;
+    
+    const constrainedBuffer = await sharp(imagePath)
+      .resize(maxWidth, maxHeight, { 
+        fit: 'inside',
+        withoutEnlargement: false
+      })
+      .png()
+      .toBuffer();
+    
+    // Save to temp file
+    const tempPath = path.join('/tmp', `preview-kitten-${Date.now()}.png`);
+    fs.writeFileSync(tempPath, constrainedBuffer);
+    
+    // Use kitten icat to send the image directly using Kitty graphics protocol
+    // --transfer-mode=stream works over any connection
+    // Without --place, image renders inline (below current content)
+    // --align left for left alignment
+    const result = spawnSync(kittenPath, [
+      'icat',
+      '--transfer-mode=stream',
+      '--align', 'left',
+      tempPath
+    ], {
+      stdio: ['ignore', 'inherit', 'pipe'],  // Ignore stdin to avoid consuming terminal input
+      encoding: 'utf-8'
+    });
+    
+    // Clean up temp file
+    try {
+      fs.unlinkSync(tempPath);
+    } catch {}
+    
+    // Re-grab input after kitten exits
+    term.grabInput(true);
+    
+    return result.status === 0;
+  } catch {
+    // Ensure we re-grab input even on error
+    term.grabInput(true);
+    return false;
+  }
+}
+
+/**
  * Display image preview using Kitty graphics protocol if supported
  */
 async function showImagePreview(imagePath: string, size: { width: number; height: number } = { width: 800, height: 800 }): Promise<void> {
-  // Check if drawImage method exists (terminal-kit feature)
+  // Try to use kitten icat for best quality (native Kitty protocol)
+  const kittenPath = findKittenIcat();
+  
+  if (kittenPath) {
+    const success = await showImageWithKittenIcat(
+      imagePath,
+      kittenPath,
+      Math.floor(size.width / 8),
+      Math.floor(size.height / 32)  // Reduced from /16 to /32 for half the height
+    );
+    
+    if (success) {
+      return;
+    }
+  }
+  
+  // Fallback: Check if drawImage method exists (terminal-kit feature)
   if (typeof term.drawImage !== 'function') {
     return;
   }
 
   try {
-    // Create a higher resolution thumbnail
+    // Create a higher resolution thumbnail with optimal quality settings
     const thumbnailBuffer = await sharp(imagePath)
-      .resize(size.width, size.height, { fit: 'inside' })
+      .resize(size.width, size.height, { 
+        fit: 'inside',
+        kernel: 'lanczos3',          // High-quality Lanczos3 resampling
+        withoutEnlargement: true     // Don't upscale small images
+      })
+      .png({ 
+        compressionLevel: 6,         // Balanced compression
+        quality: 100,                // Maximum quality
+        palette: false               // Use full RGB, not palette
+      })
+      .toColorspace('srgb')          // Ensure sRGB color space
       .toBuffer();
     
     // Save to temp file (terminal-kit needs a file path)
@@ -302,6 +425,7 @@ async function selectImagesWithPreview(imageFiles: ImageFileInfo[]): Promise<str
           break;
           
         case 'SPACE':
+        case ' ':  // Space key can be reported as a space character
           const current = filteredAndSorted[currentIndex].file;
           if (selected.has(current)) {
             selected.delete(current);
