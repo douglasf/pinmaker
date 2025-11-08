@@ -29,8 +29,7 @@ pinmaker interactive
 - Use **Space** to select/deselect individual images
 - Use **Enter** to confirm selection
 - Use **q** to cancel
-- If terminal supports Kitty graphics protocol (Kitty, WezTerm, iTerm2), shows actual image preview (800×800px high resolution)
-- **Multi-column layout**: On wide terminals (140+ chars), preview appears side-by-side with list
+- If terminal supports Kitty graphics protocol (Kitty, WezTerm, iTerm2), shows actual image preview
 - ASCII/ANSI fallback for unsupported terminals
 
 ### 2. Basic Configuration
@@ -167,13 +166,11 @@ All other features work identically across all terminals.
 1. **Live preview**: Navigate through images with ↑↓ to preview each one before selecting
 2. **Sort and filter**: Press **s** to sort by different criteria, or **/** to filter by filename
 3. **Bulk operations**: Press **a** to select all, **n** to deselect all
-4. **Wide terminal layout**: Use a terminal width of 140+ characters for side-by-side list and preview
-5. **Batch processing**: Select multiple images with Space to process them all at once
-6. **Per-pin text**: Choose "Different text per pin" to add unique text to each image
-7. **Preview before commit**: The summary screen shows all your settings before generating
-8. **Quick defaults**: Press Enter to accept default values for most prompts
-9. **Skip optional sections**: Answer "No" to styling/text prompts to skip those sections
-10. **High resolution previews**: Image previews are 800×800px in supported terminals for crystal-clear viewing
+4. **Batch processing**: Select multiple images with Space to process them all at once
+5. **Per-pin text**: Choose "Different text per pin" to add unique text to each image
+6. **Preview before commit**: The summary screen shows all your settings before generating
+7. **Quick defaults**: Press Enter to accept default values for most prompts
+8. **Skip optional sections**: Answer "No" to styling/text prompts to skip those sections
 
 ## CLI Mode Still Available
 

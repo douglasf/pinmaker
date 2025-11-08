@@ -178,9 +178,7 @@ async function selectImagesWithPreview(imageFiles: ImageFileInfo[]): Promise<str
     let filteredAndSorted = sortImages(filterImages(imageFiles, filterQuery), sortBy);
     
     const canShowPreview = typeof term.drawImage === 'function';
-    const termWidth = term.width || 120;
-    const useMultiColumn = termWidth >= 140; // Use two-column layout if terminal is wide enough
-    const pageSize = useMultiColumn ? 15 : 10;
+    const pageSize = 10;
     
     async function render() {
       term.clear();
@@ -214,60 +212,8 @@ async function selectImagesWithPreview(imageFiles: ImageFileInfo[]): Promise<str
       const startIdx = scrollOffset;
       const endIdx = Math.min(startIdx + pageSize, filteredAndSorted.length);
       
-      if (useMultiColumn && canShowPreview) {
-        // Multi-column layout: list on left, preview on right
-        const listWidth = 60;
-        
-        // Render list
-        const listLines: Array<{ line: string; isCurrent: boolean; isSelected: boolean }> = [];
-        for (let i = startIdx; i < endIdx; i++) {
-          const info = filteredAndSorted[i];
-          const isSelected = selected.has(info.file);
-          const isCurrent = i === currentIndex;
-          
-          let line = '';
-          line += isCurrent ? '▶ ' : '  ';
-          line += isSelected ? '✓ ' : '○ ';
-          
-          const displayName = info.fileName.length > 30 ? info.fileName.substring(0, 27) + '...' : info.fileName;
-          line += displayName.padEnd(35);
-          line += ` ${info.sizeFormatted.padStart(7)} ${info.dimensions}`;
-          
-          listLines.push({ line, isCurrent, isSelected });
-        }
-        
-        // Save current Y position for preview (simplified approach)
-        const previewStartY = 5;
-        
-        // Print list
-        for (const item of listLines) {
-          if (item.isCurrent) {
-            term.bold.cyan(item.line);
-          } else if (item.isSelected) {
-            term.green(item.line);
-          } else {
-            term.white(item.line);
-          }
-          term('\n');
-        }
-        
-        // Draw preview on the right side
-        if (currentIndex < filteredAndSorted.length) {
-          const currentInfo = filteredAndSorted[currentIndex];
-          term.moveTo(listWidth + 2, previewStartY);
-          term.bold.cyan('┃ Preview: ').white(currentInfo.fileName.substring(0, 30));
-          term.moveTo(listWidth + 2, previewStartY + 1);
-          term.gray(`┃ ${currentInfo.dimensions} | ${currentInfo.sizeFormatted}`);
-          term.moveTo(listWidth + 2, previewStartY + 2);
-          term.bold.cyan('┃');
-          
-          // Show preview below
-          term.moveTo(listWidth + 2, previewStartY + 3);
-          await showImagePreview(currentInfo.file, { width: 800, height: 800 });
-        }
-      } else {
-        // Single column layout
-        for (let i = startIdx; i < endIdx; i++) {
+      // List and preview layout
+      for (let i = startIdx; i < endIdx; i++) {
           const info = filteredAndSorted[i];
           const isSelected = selected.has(info.file);
           const isCurrent = i === currentIndex;
@@ -294,20 +240,19 @@ async function selectImagesWithPreview(imageFiles: ImageFileInfo[]): Promise<str
           term('\n');
         }
         
-        // Show scroll indicator
-        if (filteredAndSorted.length > pageSize) {
-          term.gray(`\nShowing ${startIdx + 1}-${endIdx} of ${filteredAndSorted.length}`);
-        }
-        
-        // Show preview of current image
-        if (canShowPreview && currentIndex < filteredAndSorted.length) {
-          const currentInfo = filteredAndSorted[currentIndex];
-          term('\n').bold.cyan('━'.repeat(75)).dim('\n');
-          term.bold.white(`Preview: ${currentInfo.fileName}\n`);
-          term.gray(`${currentInfo.dimensions} | ${currentInfo.sizeFormatted}\n`);
-          await showImagePreview(currentInfo.file, { width: 800, height: 800 });
-          term.bold.cyan('━'.repeat(75)).dim('\n');
-        }
+      // Show scroll indicator
+      if (filteredAndSorted.length > pageSize) {
+        term.gray(`\nShowing ${startIdx + 1}-${endIdx} of ${filteredAndSorted.length}`);
+      }
+      
+      // Show preview of current image
+      if (canShowPreview && currentIndex < filteredAndSorted.length) {
+        const currentInfo = filteredAndSorted[currentIndex];
+        term('\n').bold.cyan('━'.repeat(75)).dim('\n');
+        term.bold.white(`Preview: ${currentInfo.fileName}\n`);
+        term.gray(`${currentInfo.dimensions} | ${currentInfo.sizeFormatted}\n`);
+        await showImagePreview(currentInfo.file, { width: 800, height: 800 });
+        term.bold.cyan('━'.repeat(75)).dim('\n');
       }
     }
     
