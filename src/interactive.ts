@@ -24,21 +24,54 @@ export interface InteractiveConfig {
   textOutlineWidth: number;
 }
 
+interface ImageFileInfo {
+  file: string;
+  fileName: string;
+  size: number;
+  sizeFormatted: string;
+  dimensions: string;
+  width: number;
+  height: number;
+  modifiedTime: number;
+}
+
+type SortOption = 'name' | 'size' | 'dimensions' | 'date';
+
 /**
  * Get list of image files in the current directory
  */
-function getImageFiles(directory: string = '.'): string[] {
+async function getImageFiles(directory: string = '.'): Promise<ImageFileInfo[]> {
   try {
     const files = fs.readdirSync(directory);
     const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff'];
     
-    return files
+    const imageFiles = files
       .filter(file => {
         const ext = path.extname(file).toLowerCase();
         return imageExtensions.includes(ext);
       })
-      .map(file => path.resolve(directory, file))
-      .sort();
+      .map(file => path.resolve(directory, file));
+    
+    // Get detailed info for each image
+    const imageInfo = await Promise.all(
+      imageFiles.map(async (file) => {
+        const fileName = path.basename(file);
+        const stats = fs.statSync(file);
+        const dims = await getImageDimensions(file);
+        return {
+          file,
+          fileName,
+          size: stats.size,
+          sizeFormatted: formatFileSize(stats.size),
+          dimensions: dims ? `${dims.width}×${dims.height}` : 'unknown',
+          width: dims?.width || 0,
+          height: dims?.height || 0,
+          modifiedTime: stats.mtimeMs
+        };
+      })
+    );
+    
+    return imageInfo;
   } catch (error) {
     return [];
   }
@@ -59,14 +92,14 @@ async function getImageDimensions(imagePath: string): Promise<{ width: number; h
 /**
  * Display image preview using Kitty graphics protocol if supported
  */
-async function showImagePreview(imagePath: string, size: { width: number; height: number } = { width: 400, height: 400 }): Promise<void> {
+async function showImagePreview(imagePath: string, size: { width: number; height: number } = { width: 800, height: 800 }): Promise<void> {
   // Check if drawImage method exists (terminal-kit feature)
   if (typeof term.drawImage !== 'function') {
     return;
   }
 
   try {
-    // Create a thumbnail
+    // Create a higher resolution thumbnail
     const thumbnailBuffer = await sharp(imagePath)
       .resize(size.width, size.height, { fit: 'inside' })
       .toBuffer();
@@ -75,10 +108,10 @@ async function showImagePreview(imagePath: string, size: { width: number; height
     const tempPath = path.join('/tmp', `preview-${Date.now()}.png`);
     fs.writeFileSync(tempPath, thumbnailBuffer);
     
-    // Display the image
+    // Display the image at higher resolution
     await term.drawImage(tempPath, {
       shrink: {
-        width: Math.floor(size.width / 8),  // Larger display
+        width: Math.floor(size.width / 8),  // Higher resolution display
         height: Math.floor(size.height / 16)
       }
     });
@@ -91,6 +124,37 @@ async function showImagePreview(imagePath: string, size: { width: number; height
 }
 
 /**
+ * Sort images by specified criterion
+ */
+function sortImages(images: ImageFileInfo[], sortBy: SortOption): ImageFileInfo[] {
+  const sorted = [...images];
+  switch (sortBy) {
+    case 'name':
+      return sorted.sort((a, b) => a.fileName.localeCompare(b.fileName));
+    case 'size':
+      return sorted.sort((a, b) => b.size - a.size);
+    case 'dimensions':
+      return sorted.sort((a, b) => (b.width * b.height) - (a.width * a.height));
+    case 'date':
+      return sorted.sort((a, b) => b.modifiedTime - a.modifiedTime);
+    default:
+      return sorted;
+  }
+}
+
+/**
+ * Filter images based on search query
+ */
+function filterImages(images: ImageFileInfo[], query: string): ImageFileInfo[] {
+  if (!query.trim()) return images;
+  const lowerQuery = query.toLowerCase();
+  return images.filter(img => 
+    img.fileName.toLowerCase().includes(lowerQuery) ||
+    img.dimensions.includes(lowerQuery)
+  );
+}
+
+/**
  * Format file size in human-readable format
  */
 function formatFileSize(bytes: number): string {
@@ -100,85 +164,150 @@ function formatFileSize(bytes: number): string {
 }
 
 /**
- * Custom image selector with live preview
+ * Custom image selector with live preview, sorting, and filtering
  */
-async function selectImagesWithPreview(imageFiles: string[]): Promise<string[]> {
+async function selectImagesWithPreview(imageFiles: ImageFileInfo[]): Promise<string[]> {
   return new Promise(async (resolve) => {
     const selected = new Set<string>();
     let currentIndex = 0;
     let scrollOffset = 0;
-    const pageSize = 10;
+    let sortBy: SortOption = 'name';
+    let filterQuery = '';
+    let showingFilterInput = false;
     
-    // Prepare image info
-    const imageInfo = await Promise.all(
-      imageFiles.map(async (file) => {
-        const fileName = path.basename(file);
-        const stats = fs.statSync(file);
-        const dims = await getImageDimensions(file);
-        const dimsStr = dims ? `${dims.width}×${dims.height}` : 'unknown';
-        return {
-          file,
-          fileName,
-          size: formatFileSize(stats.size),
-          dimensions: dimsStr
-        };
-      })
-    );
+    let filteredAndSorted = sortImages(filterImages(imageFiles, filterQuery), sortBy);
     
     const canShowPreview = typeof term.drawImage === 'function';
+    const termWidth = term.width || 120;
+    const useMultiColumn = termWidth >= 140; // Use two-column layout if terminal is wide enough
+    const pageSize = useMultiColumn ? 15 : 10;
     
     async function render() {
       term.clear();
+      
+      // Recalculate filtered and sorted list
+      filteredAndSorted = sortImages(filterImages(imageFiles, filterQuery), sortBy);
+      
+      // Adjust currentIndex if out of bounds
+      if (currentIndex >= filteredAndSorted.length && filteredAndSorted.length > 0) {
+        currentIndex = filteredAndSorted.length - 1;
+        scrollOffset = Math.max(0, currentIndex - pageSize + 1);
+      }
+      
       term.bold.cyan('🎨 Select images\n');
-      term.gray('↑↓: navigate | Space: toggle | Enter: confirm | q: cancel\n\n');
+      
+      // Show controls
+      if (showingFilterInput) {
+        term.gray('Type to filter | ESC: cancel\n');
+        term.bold.white('Filter: ').cyan(filterQuery + '█\n\n');
+      } else {
+        term.gray('↑↓: navigate | Space: toggle | Enter: confirm | s: sort | /: filter | a: select all | n: none | q: cancel\n');
+        term.gray(`Sort: ${sortBy} | Showing: ${filteredAndSorted.length}/${imageFiles.length} images | Selected: ${selected.size}\n\n`);
+      }
+      
+      if (filteredAndSorted.length === 0) {
+        term.yellow('No images match the current filter.\n');
+        return;
+      }
       
       // Calculate visible range
       const startIdx = scrollOffset;
-      const endIdx = Math.min(startIdx + pageSize, imageFiles.length);
+      const endIdx = Math.min(startIdx + pageSize, filteredAndSorted.length);
       
-      // Show list
-      for (let i = startIdx; i < endIdx; i++) {
-        const info = imageInfo[i];
-        const isSelected = selected.has(info.file);
-        const isCurrent = i === currentIndex;
+      if (useMultiColumn && canShowPreview) {
+        // Multi-column layout: list on left, preview on right
+        const listWidth = 60;
         
-        if (isCurrent) {
-          term.bold.white('▶ ');
-        } else {
-          term('  ');
+        // Render list
+        const listLines: Array<{ line: string; isCurrent: boolean; isSelected: boolean }> = [];
+        for (let i = startIdx; i < endIdx; i++) {
+          const info = filteredAndSorted[i];
+          const isSelected = selected.has(info.file);
+          const isCurrent = i === currentIndex;
+          
+          let line = '';
+          line += isCurrent ? '▶ ' : '  ';
+          line += isSelected ? '✓ ' : '○ ';
+          
+          const displayName = info.fileName.length > 30 ? info.fileName.substring(0, 27) + '...' : info.fileName;
+          line += displayName.padEnd(35);
+          line += ` ${info.sizeFormatted.padStart(7)} ${info.dimensions}`;
+          
+          listLines.push({ line, isCurrent, isSelected });
         }
         
-        if (isSelected) {
-          term.green('✓ ');
-        } else {
-          term.gray('○ ');
+        // Save current Y position for preview (simplified approach)
+        const previewStartY = 5;
+        
+        // Print list
+        for (const item of listLines) {
+          if (item.isCurrent) {
+            term.bold.cyan(item.line);
+          } else if (item.isSelected) {
+            term.green(item.line);
+          } else {
+            term.white(item.line);
+          }
+          term('\n');
         }
         
-        if (isCurrent) {
-          term.bold.cyan(info.fileName);
-        } else {
-          term.white(info.fileName);
+        // Draw preview on the right side
+        if (currentIndex < filteredAndSorted.length) {
+          const currentInfo = filteredAndSorted[currentIndex];
+          term.moveTo(listWidth + 2, previewStartY);
+          term.bold.cyan('┃ Preview: ').white(currentInfo.fileName.substring(0, 30));
+          term.moveTo(listWidth + 2, previewStartY + 1);
+          term.gray(`┃ ${currentInfo.dimensions} | ${currentInfo.sizeFormatted}`);
+          term.moveTo(listWidth + 2, previewStartY + 2);
+          term.bold.cyan('┃');
+          
+          // Show preview below
+          term.moveTo(listWidth + 2, previewStartY + 3);
+          await showImagePreview(currentInfo.file, { width: 800, height: 800 });
+        }
+      } else {
+        // Single column layout
+        for (let i = startIdx; i < endIdx; i++) {
+          const info = filteredAndSorted[i];
+          const isSelected = selected.has(info.file);
+          const isCurrent = i === currentIndex;
+          
+          if (isCurrent) {
+            term.bold.white('▶ ');
+          } else {
+            term('  ');
+          }
+          
+          if (isSelected) {
+            term.green('✓ ');
+          } else {
+            term.gray('○ ');
+          }
+          
+          if (isCurrent) {
+            term.bold.cyan(info.fileName);
+          } else {
+            term.white(info.fileName);
+          }
+          
+          term.gray(` (${info.sizeFormatted} | ${info.dimensions})`);
+          term('\n');
         }
         
-        term.gray(` (${info.size} | ${info.dimensions})`);
-        term('\n');
-      }
-      
-      // Show scroll indicator
-      if (imageFiles.length > pageSize) {
-        term.gray(`\nShowing ${startIdx + 1}-${endIdx} of ${imageFiles.length}`);
-      }
-      
-      term.gray(` | Selected: ${selected.size}\n`);
-      
-      // Show preview of current image
-      if (canShowPreview && currentIndex < imageFiles.length) {
-        const currentInfo = imageInfo[currentIndex];
-        term('\n').bold.cyan('━'.repeat(50)).dim('\n');
-        term.bold.white(`Preview: ${currentInfo.fileName}\n`);
-        term.gray(`${currentInfo.dimensions} | ${currentInfo.size}\n`);
-        await showImagePreview(imageFiles[currentIndex], { width: 600, height: 600 });
-        term.bold.cyan('━'.repeat(50)).dim('\n');
+        // Show scroll indicator
+        if (filteredAndSorted.length > pageSize) {
+          term.gray(`\nShowing ${startIdx + 1}-${endIdx} of ${filteredAndSorted.length}`);
+        }
+        
+        // Show preview of current image
+        if (canShowPreview && currentIndex < filteredAndSorted.length) {
+          const currentInfo = filteredAndSorted[currentIndex];
+          term('\n').bold.cyan('━'.repeat(75)).dim('\n');
+          term.bold.white(`Preview: ${currentInfo.fileName}\n`);
+          term.gray(`${currentInfo.dimensions} | ${currentInfo.sizeFormatted}\n`);
+          await showImagePreview(currentInfo.file, { width: 800, height: 800 });
+          term.bold.cyan('━'.repeat(75)).dim('\n');
+        }
       }
     }
     
@@ -186,7 +315,26 @@ async function selectImagesWithPreview(imageFiles: string[]): Promise<string[]> 
     
     await render();
     
-    term.on('key', async (name: string) => {
+    term.on('key', async (name: string, matches: any, data: any) => {
+      if (showingFilterInput) {
+        // Handle filter input mode
+        if (name === 'ESCAPE') {
+          showingFilterInput = false;
+          await render();
+        } else if (name === 'BACKSPACE') {
+          filterQuery = filterQuery.slice(0, -1);
+          await render();
+        } else if (name === 'ENTER') {
+          showingFilterInput = false;
+          await render();
+        } else if (data && data.isCharacter) {
+          filterQuery += String.fromCharCode(data.codepoint);
+          await render();
+        }
+        return;
+      }
+      
+      // Normal navigation mode
       switch (name) {
         case 'UP':
           if (currentIndex > 0) {
@@ -199,7 +347,7 @@ async function selectImagesWithPreview(imageFiles: string[]): Promise<string[]> 
           break;
           
         case 'DOWN':
-          if (currentIndex < imageFiles.length - 1) {
+          if (currentIndex < filteredAndSorted.length - 1) {
             currentIndex++;
             if (currentIndex >= scrollOffset + pageSize) {
               scrollOffset = currentIndex - pageSize + 1;
@@ -209,12 +357,40 @@ async function selectImagesWithPreview(imageFiles: string[]): Promise<string[]> 
           break;
           
         case 'SPACE':
-          const current = imageFiles[currentIndex];
+          const current = filteredAndSorted[currentIndex].file;
           if (selected.has(current)) {
             selected.delete(current);
           } else {
             selected.add(current);
           }
+          await render();
+          break;
+          
+        case 'a':
+          // Select all visible
+          filteredAndSorted.forEach(info => selected.add(info.file));
+          await render();
+          break;
+          
+        case 'n':
+          // Deselect all
+          selected.clear();
+          await render();
+          break;
+          
+        case 's':
+          // Cycle through sort options
+          const sortOptions: SortOption[] = ['name', 'size', 'dimensions', 'date'];
+          const currentSortIndex = sortOptions.indexOf(sortBy);
+          sortBy = sortOptions[(currentSortIndex + 1) % sortOptions.length];
+          currentIndex = 0;
+          scrollOffset = 0;
+          await render();
+          break;
+          
+        case '/':
+          // Enter filter mode
+          showingFilterInput = true;
           await render();
           break;
           
@@ -243,7 +419,7 @@ export async function runInteractiveMode(): Promise<InteractiveConfig> {
   term.bold.cyan('🎨 Pin Maker - Interactive Mode\n\n');
   
   // Step 1: Image Selection
-  const imageFiles = getImageFiles('.');
+  const imageFiles = await getImageFiles('.');
   let selectedImages: string[] = [];
   
   if (imageFiles.length === 0) {
