@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Pin Maker</title>
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>Pin Maker</h1>
+      <div class="header-actions">
+        <button id="btn-export" class="btn btn-primary" disabled>Export PDF</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- Step 1: Image Selection -->
+      <section id="section-select" class="section active">
+        <h2>Select Images</h2>
+        <div class="file-input-container">
+          <input type="file" id="input-images" accept="image/*" multiple>
+          <label for="input-images" class="file-input-label">
+            <span class="icon">📸</span>
+            <span>Tap to select images</span>
+          </label>
+        </div>
+        <div id="image-list" class="image-list"></div>
+        <div class="section-actions">
+          <button id="btn-next-config" class="btn btn-primary" disabled>Next: Configure</button>
+        </div>
+      </section>
+
+      <!-- Step 2: Configuration -->
+      <section id="section-config" class="section">
+        <h2>Configuration</h2>
+        <div class="config-form">
+          <div class="form-group">
+            <label for="select-pin-size">Pin Size</label>
+            <select id="select-pin-size" class="input">
+              <option value="32mm">32mm (20 pins per page)</option>
+              <option value="58mm">58mm (6 pins per page)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="checkbox-duplicate">
+              <span>Duplicate to fill page</span>
+            </label>
+          </div>
+        </div>
+        <div class="section-actions">
+          <button id="btn-back-select" class="btn btn-secondary">Back</button>
+          <button id="btn-next-edit" class="btn btn-primary">Next: Edit Pins</button>
+        </div>
+      </section>
+
+      <!-- Step 3: Edit Pins -->
+      <section id="section-edit" class="section">
+        <h2>Edit Pins</h2>
+        <div class="pin-navigator">
+          <button id="btn-prev-pin" class="btn btn-icon" disabled>‹</button>
+          <span id="pin-counter" class="pin-counter">Pin 1 of 1</span>
+          <button id="btn-next-pin" class="btn btn-icon" disabled>›</button>
+        </div>
+
+        <div class="canvas-container">
+          <canvas id="canvas-preview" class="canvas-preview"></canvas>
+          <div class="canvas-controls">
+            <button id="btn-reset-transform" class="btn btn-small">Reset</button>
+          </div>
+        </div>
+
+        <div class="pin-controls">
+          <div class="control-group">
+            <h3>Transform</h3>
+            <div class="form-group">
+              <label for="slider-zoom">Zoom: <span id="label-zoom">1.0</span>x</label>
+              <input type="range" id="slider-zoom" class="slider" min="0.5" max="3" step="0.1" value="1">
+            </div>
+            <div class="form-group">
+              <label>Pan (touch and drag on canvas)</label>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <h3>Background</h3>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="checkbox-edge-color">
+                <span>Use edge color</span>
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="input-bg-color">Custom color</label>
+              <input type="color" id="input-bg-color" class="input">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <h3>Border</h3>
+            <div class="form-group">
+              <label for="input-border-color">Border color</label>
+              <input type="color" id="input-border-color" class="input" value="#000000">
+            </div>
+            <div class="form-group">
+              <label for="slider-border-width">Width: <span id="label-border-width">0</span>mm</label>
+              <input type="range" id="slider-border-width" class="slider" min="0" max="5" step="0.5" value="0">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <h3>Text Overlay</h3>
+            <div id="text-lines-container" class="text-lines-container">
+              <!-- Text lines will be added dynamically -->
+            </div>
+            <button id="btn-add-text-line" class="btn btn-small">+ Add Line</button>
+            
+            <div class="form-group">
+              <label for="select-text-position">Position</label>
+              <select id="select-text-position" class="input">
+                <option value="top">Top</option>
+                <option value="center">Center</option>
+                <option value="bottom" selected>Bottom</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="input-text-color">Text color</label>
+              <input type="color" id="input-text-color" class="input" value="#ffffff">
+            </div>
+            <div class="form-group">
+              <label for="input-text-outline">Outline color</label>
+              <input type="color" id="input-text-outline" class="input" value="#000000">
+            </div>
+            <div class="form-group">
+              <label for="slider-text-outline-width">Outline width: <span id="label-text-outline-width">2</span>pt</label>
+              <input type="range" id="slider-text-outline-width" class="slider" min="0" max="5" step="0.5" value="2">
+            </div>
+          </div>
+        </div>
+
+        <div class="section-actions">
+          <button id="btn-back-config" class="btn btn-secondary">Back</button>
+          <button id="btn-preview" class="btn btn-primary">Preview All</button>
+        </div>
+      </section>
+
+      <!-- Step 4: Preview -->
+      <section id="section-preview" class="section">
+        <h2>Preview</h2>
+        <div id="preview-container" class="preview-container">
+          <!-- Preview pages will be rendered here -->
+        </div>
+        <div class="section-actions">
+          <button id="btn-back-edit" class="btn btn-secondary">Back to Edit</button>
+        </div>
+      </section>
+    </main>
+
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <div class="spinner"></div>
+      <p id="loading-text">Processing...</p>
+    </div>
+  </div>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

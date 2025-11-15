@@ -1,0 +1,268 @@
+import { PDFDocument, rgb } from 'pdf-lib';
+import { PIN_CONFIGS, A4_PAGE } from '../core/types.js';
+import { calculateLayout, createImageDistribution } from '../core/layout.js';
+import { processImageForCircle, extractEdgeColor } from './image-processing.js';
+
+/**
+ * Generate PDF from app state
+ * @param {import('../core/types.js').AppState} state
+ * @returns {Promise<Uint8Array>}
+ */
+export async function generatePDF(state) {
+  const config = PIN_CONFIGS[state.pinSize];
+  
+  // Calculate total circles
+  const totalCircles = state.duplicate 
+    ? Math.max(state.images.length, config.circlesPerPage)
+    : state.images.length;
+  
+  const positions = calculateLayout(totalCircles, config);
+  
+  // Create distribution for duplication
+  const imageDistribution = state.duplicate
+    ? createImageDistribution(state.images.length, totalCircles)
+    : state.images.map((_, idx) => idx);
+  
+  // Process all images
+  const processedCircles = [];
+  
+  for (let circleIdx = 0; circleIdx < totalCircles; circleIdx++) {
+    const imageIdx = imageDistribution[circleIdx];
+    const imageState = state.images[imageIdx];
+    
+    if (!imageState.bitmap) {
+      // Load bitmap if not already loaded
+      imageState.bitmap = await createImageBitmap(imageState.file);
+    }
+    
+    // Process image
+    const processedBitmap = await processImageForCircle(
+      imageState.bitmap,
+      config.pinSizePt,
+      config.circleSizePt,
+      imageState.zoom,
+      imageState.offsetX,
+      imageState.offsetY
+    );
+    
+    // Extract edge color if needed
+    let edgeColor;
+    if (imageState.fillWithEdgeColor) {
+      edgeColor = await extractEdgeColor(processedBitmap);
+    }
+    
+    // Render to canvas and extract PNG
+    const canvas = new OffscreenCanvas(Math.round(config.pinSizePt), Math.round(config.pinSizePt));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get canvas context');
+    
+    // Draw the processed image
+    ctx.drawImage(processedBitmap, 0, 0);
+    
+    // Convert to PNG
+    const blob = await canvas.convertToBlob({ type: 'image/png' });
+    const arrayBuffer = await blob.arrayBuffer();
+    const imageData = new Uint8Array(arrayBuffer);
+    
+    processedCircles.push({ imageData, edgeColor });
+  }
+  
+  // Create PDF
+  const pdfDoc = await PDFDocument.create();
+  
+  let currentPage = -1;
+  let page;
+  
+  for (let circleIdx = 0; circleIdx < totalCircles; circleIdx++) {
+    const position = positions[circleIdx];
+    const imageIdx = imageDistribution[circleIdx];
+    const imageState = state.images[imageIdx];
+    const { imageData, edgeColor } = processedCircles[circleIdx];
+    
+    // Add new page if needed
+    if (position.page !== currentPage) {
+      page = pdfDoc.addPage([A4_PAGE.pageWidth, A4_PAGE.pageHeight]);
+      currentPage = position.page;
+    }
+    
+    // Determine background color
+    let bgColor = undefined;
+    if (imageState.backgroundColor) {
+      bgColor = parseColor(imageState.backgroundColor);
+    } else if (imageState.fillWithEdgeColor && edgeColor) {
+      bgColor = rgb(edgeColor.r / 255, edgeColor.g / 255, edgeColor.b / 255);
+    }
+    
+    const circleRadius = config.circleSizePt / 2;
+    const pinRadius = config.pinSizePt / 2;
+    
+    // Draw background circle if specified
+    if (bgColor) {
+      page.drawCircle({
+        x: position.x,
+        y: A4_PAGE.pageHeight - position.y, // PDF coordinates are bottom-up
+        size: circleRadius,
+        color: bgColor,
+      });
+    }
+    
+    // Draw border ring if specified
+    if (imageState.borderColor && imageState.borderWidth > 0) {
+      const borderWidthPt = imageState.borderWidth * 2.83465;
+      const borderColor = parseColor(imageState.borderColor);
+      
+      page.drawCircle({
+        x: position.x,
+        y: A4_PAGE.pageHeight - position.y,
+        size: circleRadius,
+        color: borderColor,
+      });
+      
+      // Draw inner circle (background or white)
+      page.drawCircle({
+        x: position.x,
+        y: A4_PAGE.pageHeight - position.y,
+        size: circleRadius - borderWidthPt,
+        color: bgColor ? bgColor : rgb(1, 1, 1),
+      });
+    }
+    
+    // Embed and draw the image
+    const pngImage = await pdfDoc.embedPng(imageData);
+    page.drawImage(pngImage, {
+      x: position.x - pinRadius,
+      y: A4_PAGE.pageHeight - position.y - pinRadius,
+      width: config.pinSizePt,
+      height: config.pinSizePt,
+    });
+    
+    // Draw cutting outline
+    page.drawCircle({
+      x: position.x,
+      y: A4_PAGE.pageHeight - position.y,
+      size: circleRadius,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1,
+    });
+    
+    // Draw text overlay
+    if (imageState.textLines.length > 0) {
+      drawTextToPDF(
+        page,
+        imageState.textLines,
+        position.x,
+        A4_PAGE.pageHeight - position.y,
+        config.pinSizePt,
+        imageState.textPosition,
+        imageState.textColor,
+        imageState.textOutline,
+        imageState.textOutlineWidth
+      );
+    }
+  }
+  
+  // Serialize PDF
+  return await pdfDoc.save();
+}
+
+/**
+ * Parse color string to pdf-lib RGB
+ * @param {string} color
+ * @returns {any}
+ */
+function parseColor(color) {
+  // Simple hex parser
+  if (color.startsWith('#')) {
+    const hex = color.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16) / 255;
+    const g = parseInt(hex.slice(2, 4), 16) / 255;
+    const b = parseInt(hex.slice(4, 6), 16) / 255;
+    return rgb(r, g, b);
+  }
+  
+  // RGB parser
+  const rgbMatch = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (rgbMatch) {
+    return rgb(
+      parseInt(rgbMatch[1]) / 255,
+      parseInt(rgbMatch[2]) / 255,
+      parseInt(rgbMatch[3]) / 255
+    );
+  }
+  
+  // Named colors (basic support)
+  const namedColors = {
+    white: rgb(1, 1, 1),
+    black: rgb(0, 0, 0),
+    red: rgb(1, 0, 0),
+    green: rgb(0, 1, 0),
+    blue: rgb(0, 0, 1),
+    yellow: rgb(1, 1, 0),
+    cyan: rgb(0, 1, 1),
+    magenta: rgb(1, 0, 1),
+  };
+  
+  return namedColors[color.toLowerCase()] || rgb(0, 0, 0);
+}
+
+/**
+ * Draw text overlay to PDF page (simplified - pdf-lib has limited text rendering)
+ * @param {any} page
+ * @param {{text: string, size?: number}[]} textLines
+ * @param {number} x
+ * @param {number} y
+ * @param {number} pinDiameter
+ * @param {'top' | 'center' | 'bottom'} position
+ * @param {string} textColor
+ * @param {string} _textOutline
+ * @param {number} _textOutlineWidth
+ */
+function drawTextToPDF(
+  page,
+  textLines,
+  x,
+  y,
+  pinDiameter,
+  position,
+  textColor,
+  _textOutline,
+  _textOutlineWidth
+) {
+  if (textLines.length === 0) return;
+  
+  const pinRadius = pinDiameter / 2;
+  const autoSize = pinDiameter / 8;
+  
+  const lineSizes = textLines.map(line => line.size || autoSize);
+  const lineHeights = lineSizes.map(size => size * 1.2);
+  const totalHeight = lineHeights.reduce((sum, height) => sum + height, 0);
+  
+  let startY = y;
+  if (position === 'top') {
+    startY = y + pinRadius * 0.6 + totalHeight / 2;
+  } else if (position === 'center') {
+    startY = y + totalHeight / 2;
+  } else {
+    startY = y - pinRadius * 0.6 + totalHeight / 2;
+  }
+  
+  const color = parseColor(textColor);
+  
+  let currentY = startY;
+  for (let i = 0; i < textLines.length; i++) {
+    const line = textLines[i];
+    const fontSize = lineSizes[i];
+    const lineHeight = lineHeights[i];
+    
+    // Simple centered text (pdf-lib doesn't support strokes easily)
+    const textWidth = fontSize * line.text.length * 0.6; // Rough estimate
+    page.drawText(line.text, {
+      x: x - textWidth / 2,
+      y: currentY - fontSize / 2,
+      size: fontSize,
+      color: color,
+    });
+    
+    currentY -= lineHeight;
+  }
+}

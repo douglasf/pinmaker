@@ -1,0 +1,12 @@
+{
+  "name": "pinmaker-cli",
+  "version": "1.0.0",
+  "description": "CLI tool for generating pin PDFs",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}
