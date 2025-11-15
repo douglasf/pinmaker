@@ -5,7 +5,7 @@ import { PinConfig, PinSize, PIN_CONFIGS, TextPin } from '../types/index.js';
 import { calculateLayout, getTotalPages } from './layout.js';
 
 /**
- * Extracts the average color from the edges of an image.
+ * Extracts the average color from the edges of an image, skipping transparent pixels.
  */
 async function extractEdgeColor(image: sharp.Sharp): Promise<{ r: number; g: number; b: number }> {
   const { data, info } = await image
@@ -18,38 +18,60 @@ async function extractEdgeColor(image: sharp.Sharp): Promise<{ r: number; g: num
   let totalG = 0;
   let totalB = 0;
   let pixelCount = 0;
+  
+  // Alpha threshold: pixels with alpha below this are considered transparent
+  const alphaThreshold = 10;
 
   // Process top and bottom edges
   for (let x = 0; x < width; x++) {
     // Top edge (y=0)
     const topIdx = x * channels;
-    totalR += data[topIdx];
-    totalG += data[topIdx + 1];
-    totalB += data[topIdx + 2];
+    const topAlpha = channels === 4 ? data[topIdx + 3] : 255;
+    if (topAlpha > alphaThreshold) {
+      totalR += data[topIdx];
+      totalG += data[topIdx + 1];
+      totalB += data[topIdx + 2];
+      pixelCount++;
+    }
 
     // Bottom edge (y=height-1)
     const bottomIdx = ((height - 1) * width + x) * channels;
-    totalR += data[bottomIdx];
-    totalG += data[bottomIdx + 1];
-    totalB += data[bottomIdx + 2];
+    const bottomAlpha = channels === 4 ? data[bottomIdx + 3] : 255;
+    if (bottomAlpha > alphaThreshold) {
+      totalR += data[bottomIdx];
+      totalG += data[bottomIdx + 1];
+      totalB += data[bottomIdx + 2];
+      pixelCount++;
+    }
   }
-  pixelCount += width * 2;
 
   // Process left and right edges (excluding corners already counted)
   for (let y = 1; y < height - 1; y++) {
     // Left edge (x=0)
     const leftIdx = (y * width) * channels;
-    totalR += data[leftIdx];
-    totalG += data[leftIdx + 1];
-    totalB += data[leftIdx + 2];
+    const leftAlpha = channels === 4 ? data[leftIdx + 3] : 255;
+    if (leftAlpha > alphaThreshold) {
+      totalR += data[leftIdx];
+      totalG += data[leftIdx + 1];
+      totalB += data[leftIdx + 2];
+      pixelCount++;
+    }
 
     // Right edge (x=width-1)
     const rightIdx = (y * width + (width - 1)) * channels;
-    totalR += data[rightIdx];
-    totalG += data[rightIdx + 1];
-    totalB += data[rightIdx + 2];
+    const rightAlpha = channels === 4 ? data[rightIdx + 3] : 255;
+    if (rightAlpha > alphaThreshold) {
+      totalR += data[rightIdx];
+      totalG += data[rightIdx + 1];
+      totalB += data[rightIdx + 2];
+      pixelCount++;
+    }
   }
-  pixelCount += (height - 2) * 2;
+
+  // If no opaque pixels found, return black
+  if (pixelCount === 0) {
+    return { r: 0, g: 0, b: 0 };
+  }
 
   return {
     r: Math.round(totalR / pixelCount),
@@ -60,28 +82,137 @@ async function extractEdgeColor(image: sharp.Sharp): Promise<{ r: number; g: num
 
 /**
  * Processes an image to create a foreground and extract the average edge color.
+ * @param circleDiameter - The outer circle diameter for boundary calculations (use this for editor mode)
  */
 async function processImage(
   imagePath: string,
   pinDiameter: number,
-  fill: boolean
+  circleDiameter: number,
+  fill: boolean,
+  zoom: number = 1.0,
+  offsetX: number = 0,
+  offsetY: number = 0
 ): Promise<{ foreground: Buffer; edgeColor?: { r: number; g: number; b: number } }> {
-  const image = sharp(imagePath);
+  try {
+    console.log(`[processImage] Input: zoom=${zoom}, offsetX=${offsetX}, offsetY=${offsetY}, pinDiameter=${pinDiameter}, circleDiameter=${circleDiameter}`);
+    
+    const image = sharp(imagePath);
 
-  // Extract the average edge color
-  const edgeColor = fill ? await extractEdgeColor(image) : undefined;
+    // Use circleDiameter as the boundary box size
+    const boundarySize = Math.round(circleDiameter);
+    
+    // Calculate the target size after zoom
+    const zoomedSize = Math.round(boundarySize * zoom);
 
-  // Create the foreground image with a transparent background
-  const foreground = await image
-    .clone()
-    .resize(Math.round(pinDiameter), Math.round(pinDiameter), {
-      fit: 'contain',
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    })
-    .png()
-    .toBuffer();
+    // Resize the image to the zoomed size (maintaining aspect ratio with 'contain')
+    let processedImage = image
+      .clone()
+      .resize(zoomedSize, zoomedSize, {
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      });
 
-  return { foreground, edgeColor };
+    // Handle zoom and offset:
+    // - If zoom >= 1 OR there's an offset that would cause clipping, extract a viewport
+    // - If zoom < 1 AND no offset, composite onto canvas
+    let viewportImage: sharp.Sharp;
+    
+    // Check if we need viewport extraction (when image would be clipped by offset)
+    const needsViewportExtraction = zoom >= 1.0 || 
+      (offsetX !== 0 || offsetY !== 0);
+    
+    if (needsViewportExtraction) {
+      // Create a larger canvas to allow for offsets
+      const canvasSize = zoom >= 1.0 ? zoomedSize : Math.round(boundarySize * 1.5);
+      
+      const canvas = sharp({
+        create: {
+          width: canvasSize,
+          height: canvasSize,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        }
+      });
+      
+      // Position the image on the canvas (centered by default)
+      const imageLeft = Math.round((canvasSize - zoomedSize) / 2 + offsetX);
+      const imageTop = Math.round((canvasSize - zoomedSize) / 2 + offsetY);
+      
+      const resizedBuffer = await processedImage.png().toBuffer();
+      
+      console.log(`[processImage] Using viewport extraction: canvasSize=${canvasSize}, zoomedSize=${zoomedSize}, imagePos=(${imageLeft},${imageTop}), offset=(${offsetX},${offsetY})`);
+      
+      const compositeResult = await canvas.composite([{
+        input: resizedBuffer,
+        left: imageLeft,
+        top: imageTop
+      }]).png().toBuffer();
+      
+      // Extract the viewport (center of canvas)
+      const extractLeft = Math.round((canvasSize - boundarySize) / 2);
+      const extractTop = Math.round((canvasSize - boundarySize) / 2);
+      
+      console.log(`[processImage] Extracting viewport from (${extractLeft},${extractTop}) size ${boundarySize}x${boundarySize}`);
+      
+      viewportImage = sharp(compositeResult).extract({
+        left: extractLeft,
+        top: extractTop,
+        width: boundarySize,
+        height: boundarySize
+      });
+    } else {
+      // Zoom < 1 and no offset: Simple center composite
+      const canvas = sharp({
+        create: {
+          width: boundarySize,
+          height: boundarySize,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        }
+      });
+      
+      const left = Math.round((boundarySize - zoomedSize) / 2);
+      const top = Math.round((boundarySize - zoomedSize) / 2);
+      
+      console.log(`[processImage] Simple center composite: boundarySize=${boundarySize}, zoomedSize=${zoomedSize}, pos=(${left},${top})`);
+      
+      const resizedBuffer = await processedImage.png().toBuffer();
+      
+      const compositeResult = await canvas.composite([{
+        input: resizedBuffer,
+        left: left,
+        top: top
+      }]).png().toBuffer();
+      
+      viewportImage = sharp(compositeResult);
+    }
+
+    // Extract the average edge color AFTER zoom/offset transformations
+    const edgeColor = fill ? await extractEdgeColor(viewportImage) : undefined;
+
+    // Now crop to pin diameter if circleDiameter > pinDiameter
+    let finalImage = viewportImage;
+    if (circleDiameter > pinDiameter) {
+      const cropOffset = Math.round((circleDiameter - pinDiameter) / 2);
+      finalImage = viewportImage.extract({
+        left: cropOffset,
+        top: cropOffset,
+        width: Math.round(pinDiameter),
+        height: Math.round(pinDiameter)
+      });
+    }
+
+    // Create the final foreground image
+    const foreground = await finalImage
+      .png()
+      .toBuffer();
+
+    return { foreground, edgeColor };
+  } catch (error: any) {
+    console.error(`[processImage] ERROR:`, error.message);
+    console.error(`[processImage] Stack:`, error.stack);
+    throw error;
+  }
 }
 
 /**
@@ -107,16 +238,11 @@ function drawEmptyCircle(
   
   doc.save();
   
-  // Draw background if specified
-  if (backgroundColor) {
-    doc.circle(x, y, circleRadius).fill(backgroundColor);
-  }
-  
   // Draw border ring if specified
   if (borderColor && borderWidth > 0) {
-    // Border starts at (pinDiameter - borderWidth) and extends to circleDiameter
-    const borderInnerRadius = (pinDiameter - borderWidth * 2) / 2;
+    // Border extends from outer circle edge inward by borderWidth
     const borderOuterRadius = circleRadius;
+    const borderInnerRadius = circleRadius - borderWidth;
     
     // Draw the outer circle with border color
     doc.circle(x, y, borderOuterRadius).fill(borderColor);
@@ -127,6 +253,9 @@ function drawEmptyCircle(
     } else {
       doc.circle(x, y, borderInnerRadius).fill('white');
     }
+  } else if (backgroundColor) {
+    // No border, but we have a background color
+    doc.circle(x, y, circleRadius).fill(backgroundColor);
   }
   
   // Draw the cutting outline
@@ -208,7 +337,7 @@ function drawTextOverlay(
     const textWidth = doc.widthOfString(line.text);
     const textX = x - textWidth / 2;
     
-    // Draw text outline (stroke) first for visibility
+    // Draw text outline (stroke) first for visibility (skip if outlineWidth is 0)
     if (textOutline && textOutlineWidth > 0) {
       doc.fillColor(textOutline);
       doc.lineWidth(textOutlineWidth);
@@ -272,35 +401,33 @@ function drawCircularImage(
 
   doc.save();
   
-  // Priority: explicit backgroundColor > edgeColor from fill
+  // Determine background fill color: explicit backgroundColor > edgeColor > transparent
+  let fillColor = null;
   if (backgroundColor) {
-    // Draw the solid color background circle with explicit color
-    doc.circle(x, y, circleRadius).fill(backgroundColor);
+    fillColor = backgroundColor;
   } else if (edgeColor) {
-    const hexColor = `#${edgeColor.r.toString(16).padStart(2, '0')}${edgeColor.g.toString(16).padStart(2, '0')}${edgeColor.b.toString(16).padStart(2, '0')}`;
-    // Draw the solid color background circle
-    doc.circle(x, y, circleRadius).fill(hexColor);
+    fillColor = `#${edgeColor.r.toString(16).padStart(2, '0')}${edgeColor.g.toString(16).padStart(2, '0')}${edgeColor.b.toString(16).padStart(2, '0')}`;
   }
 
   // Draw border ring if specified
   if (borderColor && borderWidth > 0) {
-    // Border starts at (pinDiameter - borderWidth) and extends to circleDiameter
-    const borderInnerRadius = (pinDiameter - borderWidth * 2) / 2;
+    // Border extends from outer circle edge inward by borderWidth
     const borderOuterRadius = circleRadius;
+    const borderInnerRadius = circleRadius - borderWidth;
     
     // Draw the outer circle with border color
     doc.circle(x, y, borderOuterRadius).fill(borderColor);
     
     // Cut out the inner circle to create a ring effect
-    // Priority: explicit backgroundColor > edgeColor > white
-    if (backgroundColor) {
-      doc.circle(x, y, borderInnerRadius).fill(backgroundColor);
-    } else if (edgeColor) {
-      const hexColor = `#${edgeColor.r.toString(16).padStart(2, '0')}${edgeColor.g.toString(16).padStart(2, '0')}${edgeColor.b.toString(16).padStart(2, '0')}`;
-      doc.circle(x, y, borderInnerRadius).fill(hexColor);
+    if (fillColor) {
+      doc.circle(x, y, borderInnerRadius).fill(fillColor);
     } else {
+      // No fill color, cut out inner with white/transparent
       doc.circle(x, y, borderInnerRadius).fill('white');
     }
+  } else if (fillColor) {
+    // No border, but we have a fill color - draw background circle
+    doc.circle(x, y, circleRadius).fill(fillColor);
   }
 
   // Draw the foreground image on top, centered and sized to the pin diameter
@@ -368,7 +495,10 @@ export async function generatePinPDF(
   textColor: string,
   defaultTextSize: number,
   textOutline: string,
-  textOutlineWidth: number
+  textOutlineWidth: number,
+  zoomLevels: number[] = [],
+  offsetXValues: number[] = [],
+  offsetYValues: number[] = []
 ): Promise<void> {
   const config: PinConfig = PIN_CONFIGS[pinSize];
   
@@ -463,11 +593,21 @@ export async function generatePinPDF(
     }
   }
 
-  const processedImages: Array<{ foreground: Buffer; edgeColor?: { r: number; g: number; b: number } }> = [];
-  for (let i = 0; i < imagePaths.length; i++) {
-    console.log(`Processing image ${i + 1}/${imagePaths.length}: ${imagePaths[i]}`);
-    const result = await processImage(imagePaths[i], config.pinSizePt, fill);
-    processedImages.push(result);
+  // Process each circle individually with its own zoom/offset settings
+  // Note: zoomLevels, offsetXValues, offsetYValues arrays are indexed per circle, not per unique image
+  const processedCircles: Array<{ foreground: Buffer; edgeColor?: { r: number; g: number; b: number } }> = [];
+  
+  console.log(`Processing ${totalCircles} circle(s) with individual settings...`);
+  for (let circleIdx = 0; circleIdx < totalCircles; circleIdx++) {
+    const imageIdx = imageDistribution[circleIdx];
+    const imagePath = imagePaths[imageIdx];
+    const zoom = zoomLevels[circleIdx] || 1.0;
+    const offsetX = offsetXValues[circleIdx] || 0;
+    const offsetY = offsetYValues[circleIdx] || 0;
+    
+    console.log(`Processing circle ${circleIdx + 1}/${totalCircles}: ${imagePath} (zoom: ${zoom.toFixed(2)}, offset: ${offsetX},${offsetY})`);
+    const result = await processImage(imagePath, config.pinSizePt, config.circleSizePt, fill, zoom, offsetX, offsetY);
+    processedCircles.push(result);
   }
 
   const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false });
@@ -477,7 +617,6 @@ export async function generatePinPDF(
   let currentPage = -1;
   for (let circleIdx = 0; circleIdx < totalCircles; circleIdx++) {
     const position = positions[circleIdx];
-    const imageIdx = imageDistribution[circleIdx];
     const textIdx = textDistribution[circleIdx];
     
     if (position.page !== currentPage) {
@@ -488,8 +627,8 @@ export async function generatePinPDF(
     
     drawCircularImage(
       doc,
-      processedImages[imageIdx].foreground,
-      fill ? processedImages[imageIdx].edgeColor : undefined,
+      processedCircles[circleIdx].foreground,
+      fill ? processedCircles[circleIdx].edgeColor : undefined,
       position.x,
       position.y,
       config.pinSizePt,

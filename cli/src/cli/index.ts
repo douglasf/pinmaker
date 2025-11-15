@@ -74,6 +74,12 @@ if (isInteractiveMode) {
     try {
       const config = await runInteractiveMode();
       
+      // DEBUG: Log values being passed to generatePinPDF
+      console.log('[DEBUG] Passing to generatePinPDF:');
+      console.log('  zoomLevels:', config.zoomLevels);
+      console.log('  offsetXValues:', config.offsetXValues);
+      console.log('  offsetYValues:', config.offsetYValues);
+      
       // Generate PDF with the config from interactive mode
       await generatePinPDF(
         config.images,
@@ -89,7 +95,10 @@ if (isInteractiveMode) {
         config.textColor,
         config.textSize,
         config.textOutline,
-        config.textOutlineWidth
+        config.textOutlineWidth,
+        config.zoomLevels,
+        config.offsetXValues,
+        config.offsetYValues
       );
       
       console.log('\n✨ Done!\n');

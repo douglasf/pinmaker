@@ -1,28 +1,32 @@
 # Pin Maker PDF Generator
 
-A CLI tool to create PDFs with images arranged in circles for making pins/badges. Print each image once or use the duplicate flag to fill entire pages. Supports text overlays, custom styling, and blank templates.
+Create PDFs with images arranged in circles for making pins/badges. Available as both a **mobile-friendly web app** and a **CLI tool**.
 
-## Features
+## 🌐 Web App (Recommended for Mobile)
 
-- **Interactive Mode:** Run `pinmaker` without arguments for a user-friendly interactive TUI with image previews (Kitty graphics protocol supported)
-- **Two pin sizes supported:**
-  - 32mm pins → 20 circles per page (4 columns × 5 rows)
-  - 58mm pins → 6 circles per page (2 columns × 3 rows)
-- **Flexible image handling:** 
-  - Print each image once by default
-  - Optional duplication with `-d` flag to fill all circles per page
-- **Text overlay:** Add custom text to pins with positioning, color, and outline options
-- **Styling options:** Custom borders, background colors, and fill modes
-- **Blank templates:** Generate text-only pins without images
-- **Proper sizing for pin machines:** Images are sized to the actual pin diameter (32mm or 58mm), with extra circle space (43mm or 70mm) for the paper to bend around the pin frame
-- **Global CLI tool:** Install once and use from anywhere on your system
-- **Optimal layout:** Automatically centered on A4 pages with proper spacing
-- **Handles any aspect ratio:** Square, landscape, and portrait images all work perfectly
-- **Cutting guides:** Circle outlines for precise cutting
+Use the browser-based version at: **[Your GitHub Pages URL will go here]**
 
-## Installation
+- **Mobile-first design** with touch gestures
+- **Per-pin customization** (zoom, position, colors, borders, text)
+- **Live preview** and multi-page PDF export
+- **Works offline** - all processing in your browser
+- No installation required!
 
-### Install as a global CLI tool:
+See [web/README.md](./web/README.md) for details.
+
+## 💻 CLI Tool (For Desktop)
+
+Command-line tool with interactive TUI mode for batch processing.
+
+### Features
+
+- **Interactive Mode:** TUI with image previews
+- **Two pin sizes:** 32mm (20/page) and 58mm (6/page)
+- **Text overlay:** Multi-line text with styling
+- **Styling options:** Borders, backgrounds, edge-color detection
+- **Handles any aspect ratio:** Square, landscape, portrait
+
+### Installation
 
 ```bash
 npm install
@@ -30,267 +34,98 @@ npm run build
 npm link
 ```
 
-Now you can use `pinmaker` from anywhere!
+### Usage
 
-## Usage
-
-### Interactive Mode (Recommended)
-
-Run `pinmaker` without any arguments to enter interactive mode:
-
+**Interactive Mode (Recommended):**
 ```bash
 pinmaker
 ```
 
-This launches a user-friendly TUI that guides you through:
-- Selecting images with checkbox controls
-- Image previews (in Kitty, WezTerm, iTerm2 terminals)
-- Configuring all options step-by-step
-- Review summary before generating
-
-See [INTERACTIVE_MODE.md](./INTERACTIVE_MODE.md) for detailed guide.
-
-### CLI Mode
-
-For scripting and automation, use the traditional CLI:
-
+**CLI Mode:**
 ```bash
 pinmaker <images...> [options]
 ```
 
-### Options:
-
-**Basic Options:**
-- `-s, --size <size>`: Pin size (`32mm` or `58mm`, default: `32mm`)
-- `-o, --output <file>`: Output PDF file (default: `pins.pdf`)
-- `-d, --duplicate`: Duplicate images to fill page (20 for 32mm, 6 for 58mm)
-- `-V, --version`: Show version number
-- `-h, --help`: Display help information
-
-**Styling Options:**
-- `--background-color [color]`: Background color for pins (hex, rgb, or named color). If no color specified, uses average edge color from image
-- `--border-color <color>`: Border color (hex, rgb, or named color)
-- `--border-width <mm>`: Border width in mm, extending inward from pin edge (default: `0`)
-
-**Text Options:**
-- `--text <string> [size] [string] [size]...`: Text to display on pin (can be specified multiple times)
-  - Each `--text` flag creates one pin with one or more lines
-  - Follow each string with an optional number to set that line's font size in points
-  - Lines without a size will auto-scale based on pin diameter
-  - Multiple `--text` flags create multiple text pins
-- `--text-position <position>`: Text position: `top`, `center`, or `bottom` (default: `bottom`)
-- `--text-color <color>`: Text color (default: `white`)
-- `--text-size <number>`: Default font size in points for lines without individual sizes (auto-scales if not specified)
-- `--text-outline <color>`: Text outline color for better visibility (default: `black`)
-- `--text-outline-width <number>`: Text outline width in points (default: `2`)
-
-### Examples:
-
-**Generate 32mm pins from 2 images (printed once each):**
-```bash
-pinmaker image1.jpg image2.jpg
-```
-
-**Duplicate images to fill a full page (20 circles for 32mm):**
-```bash
-pinmaker image1.jpg image2.jpg -d
-```
-
-**Generate 58mm pins with custom output name:**
-```bash
-pinmaker photo.jpg -s 58mm -o mybadges.pdf
-```
-
-**Create blank template with text:**
-```bash
-pinmaker --text "Hello" --text "World" --text-color blue
-```
-
-**Add text to images with custom positioning:**
-```bash
-pinmaker photo.jpg --text "Team Name" --text-position top --text-color white
-```
-
-**Multi-line text on a single pin:**
-```bash
-pinmaker --text "Line 1" "Line 2" "Line 3"
-```
-
-**Multi-line text with individual font sizes:**
-```bash
-pinmaker --text "HEADING" 30 "Subtitle" 18 "Details" 12
-```
-
-**Multiple pins with different multi-line text:**
-```bash
-pinmaker --text "First" 24 "Pin" 16 --text "Second" 24 "Pin" 16
-```
-
-**Combine multi-line text with images:**
-```bash
-pinmaker photo.jpg --text "Team" 28 "2025" 20 --text-position top
-```
-
-**Create pins with borders and background color:**
-```bash
-pinmaker image.jpg --border-color gold --border-width 2 --background-color navy
-```
-
-**Fill background with average edge color from image:**
-```bash
-pinmaker image.jpg --background-color
-```
-
-**Use with glob patterns:**
-```bash
-pinmaker ~/Pictures/*.jpg -s 32mm -o output.pdf
-```
-
-**From any directory:**
-```bash
-cd ~/Desktop
-pinmaker ~/Documents/photos/*.png -o pins.pdf
-```
-
-## Pin Specifications
-
-| Pin Size | Image Diameter | Cutting Circle | Circles per Page | Layout |
-|----------|----------------|----------------|-----------------|---------|
-| 32mm     | 32mm           | 43mm           | 20              | 4 × 5   |
-| 58mm     | 58mm           | 70mm           | 6               | 2 × 3   |
-
-The image is sized to match the actual pin diameter (32mm or 58mm). The larger cutting circle (43mm or 70mm) provides extra space needed for the paper to bend around the pin frame in the pin-making machine.
-
-## Multi-Line Text Feature
-
-The `--text` option supports multiple lines on a single pin with individual font sizes for each line.
-
-**Syntax:**
-```bash
---text "line1" [size1] "line2" [size2] ...
-```
-
-**How it works:**
-- Each `--text` flag creates **one pin** with one or more text lines
-- Place a **number after a string** to set that line's font size in points
-- Lines **without a size** will auto-scale based on the pin diameter
-- Use **multiple `--text` flags** to create multiple different text pins
-- Lines are **centered as a group** and stacked with 1.2x line height spacing
-
 **Examples:**
-
-Single line (backward compatible):
 ```bash
---text "Hello World"
+# Generate 32mm pins
+pinmaker image1.jpg image2.jpg
+
+# Duplicate to fill page
+pinmaker image1.jpg -d
+
+# 58mm with text
+pinmaker photo.jpg -s 58mm --text "Team 2025"
+
+# Blank template
+pinmaker --text "Hello" "World"
 ```
 
-Three lines with auto-sizing:
-```bash
---text "Line 1" "Line 2" "Line 3"
-```
+See [INTERACTIVE_MODE.md](./INTERACTIVE_MODE.md) for full CLI documentation.
 
-Custom sizes for each line:
-```bash
---text "BIG TITLE" 32 "Smaller subtitle" 18 "tiny details" 10
-```
-
-Mix custom and auto-sized lines:
-```bash
---text "EVENT NAME" 28 "Date and Location"
-```
-
-Create multiple different pins:
-```bash
---text "Alice" 24 "Developer" 14 --text "Bob" 24 "Designer" 14
-```
-
-Combine with images and positioning:
-```bash
-pinmaker team-photo.jpg --text "TEAM" 30 "Champions 2025" 16 --text-position top
-```
-
-### Image Distribution
-
-**Default behavior (no `-d` flag):**
-- Each image is printed once
-- Multiple pages are created as needed
-  - Example: 25 images for 32mm → 2 pages (20 + 5 circles)
-
-**With `-d, --duplicate` flag:**
-- Images are duplicated evenly to fill all circles per page
-  - Example: 2 images for 32mm → each image appears 10 times = 20 total circles
-  - Example: 3 images for 58mm → 2 images appear twice, 1 appears once = 6 total circles
-
-**Blank templates:**
-- Omit images to generate blank pins (useful with `--text` option)
-- Text can be specified multiple times to create different text pins
-
-```
-For 32mm pins:
-┌─────────────────────────────┐
-│    43mm Cutting Circle      │
-│   ┌───────────────────┐     │
-│   │                   │     │
-│   │   32mm Image      │     │  ← Extra space for
-│   │   (centered)      │     │    bending paper
-│   │                   │     │    around frame
-│   └───────────────────┘     │
-│                             │
-└─────────────────────────────┘
-```
-
-## Image Requirements
-
-- **Supported formats:** JPG, PNG, WEBP, GIF, SVG, TIFF
-- **Aspect ratios:** Any aspect ratio works! The tool fits the entire image within the circle
-  - Wide images (landscape) will have white space on top/bottom
-  - Tall images (portrait) will have white space on left/right
-  - Square images fill the circle completely
-- **Resolution:** Higher resolution images produce better quality results
-
-## How It Works
-
-1. Images are loaded and processed (or blank circles are created if no images provided)
-2. Each image is resized to fit entirely within a square (maintaining aspect ratio)
-3. Images are sized to the exact pin diameter (32mm or 58mm)
-4. Non-square images get white padding to center them (unless background color is specified)
-5. If `-d` flag is used, images are duplicated evenly to fill all circles per page
-6. Text overlays are added if specified (with positioning, color, and outline)
-7. Borders are applied if specified
-8. Images are placed centered within larger cutting circles (43mm or 70mm)
-9. Circles are arranged in a fixed grid (4×5 for 32mm, 2×3 for 58mm) on A4 pages
-10. PDF is generated with circular clipping masks and cutting guide outlines
-
-The extra space between the image edge and cutting circle is essential for the pin-making machine to bend the paper around the pin frame.
-
-## Output
-
-The generated PDF will have:
-- A4 page size (210mm × 297mm)
-- Fixed number of circles per page (20 for 32mm, 6 for 58mm)
-- Images sized to actual pin diameter (32mm or 58mm), centered within circles
-- Black outlines around each cutting circle (43mm or 70mm) for cutting guides
-- Extra space between image and cutting line for paper bending
-- Proper spacing between circles for easy cutting
-- Multiple pages if needed
-
-## Uninstalling
-
-To remove the global CLI tool:
+### Uninstall
 
 ```bash
 npm unlink -g pinmaker
 ```
 
-## Development
+## 📐 Pin Specifications
 
-After making changes to the source code:
+| Pin Size | Image Diameter | Cutting Circle | Per Page | Layout |
+|----------|----------------|----------------|----------|---------|
+| 32mm     | 32mm           | 43mm           | 20       | 4 × 5   |
+| 58mm     | 58mm           | 70mm           | 6        | 2 × 3   |
 
-```bash
-npm run build
-# Changes are immediately available to the global `pinmaker` command
+The image is sized to the pin diameter. The larger cutting circle provides space for paper to bend around the pin frame.
+
+## 📁 Project Structure
+
+```
+pinmaker/
+├── cli/                    # CLI tool source code
+│   ├── src/               # TypeScript source
+│   ├── dist/              # Compiled JavaScript
+│   └── tsconfig.json      # TypeScript config
+├── web/                    # Browser-based web app
+│   ├── src/               # JavaScript modules
+│   ├── styles/            # CSS
+│   └── index.html         # Main HTML
+├── test-images/           # Sample images for testing
+└── README.md              # This file
 ```
 
-## License
+## 🛠 Development
+
+### CLI Development
+
+```bash
+npm run build              # Compile TypeScript
+npm test                   # Run tests
+```
+
+### Web App Development
+
+```bash
+cd web
+npm install
+npm run dev                # Start dev server
+npm run build              # Build for production
+```
+
+## 📄 Documentation
+
+- [INTERACTIVE_MODE.md](./INTERACTIVE_MODE.md) - Full CLI documentation and options
+- [web/README.md](./web/README.md) - Web app documentation
+- [QUICK_START_WEB.md](./QUICK_START_WEB.md) - Quick start guide for web app
+- [WEB_APP_COMPLETE.md](./WEB_APP_COMPLETE.md) - Implementation details
+
+## 🤝 Contributing
+
+The project uses:
+- **CLI:** TypeScript, Node.js, Sharp for image processing, PDFKit for PDF generation
+- **Web:** Vanilla JavaScript, Canvas API for image processing, pdf-lib for PDF generation
+- **Shared:** Core layout calculations work in both CLI and web
+
+## 📝 License
 
 MIT

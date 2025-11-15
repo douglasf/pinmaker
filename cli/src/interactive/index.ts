@@ -1,10 +1,15 @@
-import { checkbox, input, select, confirm, editor } from '@inquirer/prompts';
-import { PinSize, TextPin, TextLine } from '../types/index.js';
+import { input, select, confirm } from '@inquirer/prompts';
+import { PinSize, TextPin } from '../types/index.js';
 import fs from 'fs';
 import path from 'path';
 import terminalKit from 'terminal-kit';
 import sharp from 'sharp';
-import { execSync, spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import os from 'os';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const term = terminalKit.terminal;
 
@@ -23,6 +28,9 @@ export interface InteractiveConfig {
   textSize: number;
   textOutline: string;
   textOutlineWidth: number;
+  zoomLevels: number[];
+  offsetXValues: number[];
+  offsetYValues: number[];
 }
 
 export interface ImageFileInfo {
@@ -553,226 +561,141 @@ export async function runInteractiveMode(): Promise<InteractiveConfig> {
     });
   }
   
-  // Step 3: Styling Options
-  term('\n').bold.cyan('🎨 Styling Options\n\n');
+  // Step 3: Edit images?
+  term('\n').bold.cyan('🎨 Customization\n\n');
   
-  const customizeStyling = await confirm({
-    message: 'Customize background and border?',
+  const editImages = await confirm({
+    message: 'Edit images? (position, zoom, background, border, text)',
     default: false
   });
   
+  // Default values (will be customized in browser editor if user chooses to edit)
   let fillWithEdgeColor = false;
   let backgroundColor = '';
   let borderColor = '';
   let borderWidth = 0;
-  
-  if (customizeStyling) {
-    const backgroundMode = await select({
-      message: 'Background fill:',
-      choices: [
-        { name: 'None (transparent)', value: 'none' },
-        { name: 'Auto (edge color)', value: 'auto' },
-        { name: 'Custom color', value: 'custom' }
-      ],
-      default: 'none'
-    });
-    
-    if (backgroundMode === 'auto') {
-      fillWithEdgeColor = true;
-    } else if (backgroundMode === 'custom') {
-      backgroundColor = await input({
-        message: 'Background color (hex, rgb, or named):',
-        default: '#ffffff'
-      });
-    }
-    
-    const addBorder = await confirm({
-      message: 'Add border?',
-      default: false
-    });
-    
-    if (addBorder) {
-      borderColor = await input({
-        message: 'Border color (hex, rgb, or named):',
-        default: '#000000'
-      });
-      
-      const borderWidthStr = await input({
-        message: 'Border width in mm:',
-        default: '1',
-        validate: (value) => {
-          const num = parseFloat(value);
-          if (isNaN(num) || num < 0) {
-            return 'Must be a non-negative number';
-          }
-          return true;
-        }
-      });
-      borderWidth = parseFloat(borderWidthStr);
-    }
-  }
-  
-  // Step 4: Text Configuration
-  term('\n').bold.cyan('✍️  Text Options\n\n');
-  
-  const addText = await confirm({
-    message: 'Add text to pins?',
-    default: false
-  });
-  
   let textPins: TextPin[] = [];
   let textPosition: 'top' | 'center' | 'bottom' = 'bottom';
   let textColor = 'white';
   let textSize = 0;
   let textOutline = 'black';
   let textOutlineWidth = 2;
+  let zoomLevels: number[] = [];
+  let offsetXValues: number[] = [];
+  let offsetYValues: number[] = [];
   
-  if (addText) {
-    const textMode = await select({
-      message: 'Text configuration:',
-      choices: [
-        { name: 'Same text on all pins', value: 'global' },
-        { name: 'Different text per pin', value: 'per-pin' }
-      ],
-      default: 'global'
-    });
+  if (editImages) {
+    term.yellow('\n🌐 Launching browser editor...\n');
     
-    if (textMode === 'global') {
-      const textInput = await editor({
-        message: 'Enter text lines (one per line, empty line to finish):',
-        default: '',
-        postfix: '.txt'
-      });
+    try {
+      // Start the Electron editor via subprocess
+      term.green('🚀 Opening editor window...\n');
+      term.gray('Edit your images and click "Done Editing" when finished.\n\n');
       
-      const lines = textInput.trim().split('\n').filter(line => line.trim() !== '');
-      const textLines: TextLine[] = [];
+      // Create temp config file
+      const tmpDir = os.tmpdir();
+      const configPath = path.join(tmpDir, `pinmaker-${Date.now()}.config.json`);
+      const resultPath = configPath.replace('.config.json', '.result.json');
       
-      for (const line of lines) {
-        const customizeSize = await confirm({
-          message: `Set custom size for "${line.substring(0, 30)}"?`,
-          default: false
+      fs.writeFileSync(configPath, JSON.stringify({
+        images: selectedImages,
+        size,
+        duplicate
+      }));
+      
+      // Spawn Electron process
+      const electronPath = path.join(__dirname, '../../node_modules/.bin/electron');
+      const launcherPath = path.join(__dirname, '../../electron-launcher.mjs');
+      
+      await new Promise<void>((resolve, reject) => {
+        const electronProcess = spawn(electronPath, [launcherPath, configPath], {
+          stdio: 'inherit',
+          shell: false
         });
         
-        if (customizeSize) {
-          const sizeStr = await input({
-            message: 'Font size in points:',
-            default: '24',
-            validate: (value) => {
-              const num = parseFloat(value);
-              if (isNaN(num) || num <= 0) {
-                return 'Must be a positive number';
-              }
-              return true;
-            }
-          });
-          textLines.push({ text: line, size: parseFloat(sizeStr) });
-        } else {
-          textLines.push({ text: line });
-        }
-      }
-      
-      textPins = [textLines];
-    } else {
-      // Per-pin text
-      const numPins = selectedImages.length > 0 ? selectedImages.length : 1;
-      term.gray(`\nConfiguring text for ${numPins} pin(s)...\n\n`);
-      
-      for (let i = 0; i < numPins; i++) {
-        term.cyan(`Pin ${i + 1}/${numPins}${selectedImages[i] ? ` (${path.basename(selectedImages[i])})` : ''}:\n`);
-        
-        const textInput = await editor({
-          message: `Enter text lines for pin ${i + 1}:`,
-          default: '',
-          postfix: '.txt'
+        electronProcess.on('close', (code) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`Electron exited with code ${code}`));
+          }
         });
         
-        const lines = textInput.trim().split('\n').filter(line => line.trim() !== '');
-        const textLines: TextLine[] = lines.map(line => ({ text: line }));
-        
-        textPins.push(textLines);
-      }
-    }
-    
-    // Text styling options
-    term('\n');
-    textPosition = await select({
-      message: 'Text position:',
-      choices: [
-        { name: 'Top', value: 'top' },
-        { name: 'Center', value: 'center' },
-        { name: 'Bottom', value: 'bottom' }
-      ],
-      default: 'bottom'
-    }) as 'top' | 'center' | 'bottom';
-    
-    textColor = await input({
-      message: 'Text color (hex, rgb, or named):',
-      default: 'white'
-    });
-    
-    const autoSize = await confirm({
-      message: 'Auto-scale text size?',
-      default: true
-    });
-    
-    if (!autoSize) {
-      const sizeStr = await input({
-        message: 'Default text size in points:',
-        default: '24',
-        validate: (value) => {
-          const num = parseFloat(value);
-          if (isNaN(num) || num <= 0) {
-            return 'Must be a positive number';
-          }
-          return true;
-        }
-      });
-      textSize = parseFloat(sizeStr);
-    }
-    
-    const addOutline = await confirm({
-      message: 'Add text outline for better visibility?',
-      default: true
-    });
-    
-    if (addOutline) {
-      textOutline = await input({
-        message: 'Outline color:',
-        default: 'black'
+        electronProcess.on('error', (err) => {
+          reject(err);
+        });
       });
       
-      const outlineWidthStr = await input({
-        message: 'Outline width in points:',
-        default: '2',
-        validate: (value) => {
-          const num = parseFloat(value);
-          if (isNaN(num) || num < 0) {
-            return 'Must be a non-negative number';
-          }
-          return true;
+      // Read result from temp file
+      if (!fs.existsSync(resultPath)) {
+        throw new Error('Editor did not save results');
+      }
+      
+      const editorState = JSON.parse(fs.readFileSync(resultPath, 'utf-8'));
+      
+      // Clean up temp files
+      fs.unlinkSync(configPath);
+      fs.unlinkSync(resultPath);
+      
+      term.green('✓ Editor closed. Applying your settings...\n');
+      
+      // DEBUG: Log the editor state
+      console.log('[DEBUG] Editor state:', JSON.stringify(editorState, null, 2));
+      
+      // Extract settings from editor state and apply them
+      // Since each image can have different settings, we need to handle this carefully
+      // For now, we'll use the first image's settings as defaults
+      if (editorState.images.length > 0) {
+        const firstImage = editorState.images[0];
+        
+        // Apply background settings
+        fillWithEdgeColor = firstImage.fillWithEdgeColor;
+        backgroundColor = firstImage.backgroundColor;
+        
+        // Apply border settings
+        borderColor = firstImage.borderColor;
+        borderWidth = firstImage.borderWidth;
+        
+        // Extract zoom and offset values for each image
+        zoomLevels = editorState.images.map((img: any) => img.zoom);
+        offsetXValues = editorState.images.map((img: any) => img.offsetX);
+        offsetYValues = editorState.images.map((img: any) => img.offsetY);
+        
+        // DEBUG: Log extracted values
+        console.log('[DEBUG] Extracted zoomLevels:', zoomLevels);
+        console.log('[DEBUG] Extracted offsetXValues:', offsetXValues);
+        console.log('[DEBUG] Extracted offsetYValues:', offsetYValues);
+        
+        // Apply text settings from each image
+        textPins = editorState.images.map((img: any) => 
+          img.textLines.map((line: any) => ({
+            text: line.text,
+            size: line.size
+          }))
+        );
+        
+        // Use first image's text settings as defaults
+        if (firstImage.textLines.length > 0) {
+          const firstTextLine = firstImage.textLines[0];
+          textPosition = firstTextLine.position || 'bottom';
+          textColor = firstTextLine.color || 'white';
+          textOutline = firstTextLine.outline || 'black';
+          textOutlineWidth = firstTextLine.outlineWidth || 2;
         }
-      });
-      textOutlineWidth = parseFloat(outlineWidthStr);
-    } else {
-      textOutline = '';
-      textOutlineWidth = 0;
+      }
+    } catch (error) {
+      term.red('\n❌ Failed to launch editor: ' + (error instanceof Error ? error.message : String(error)) + '\n');
+      term.yellow('Proceeding with default settings...\n');
     }
   }
   
-  // Step 5: Confirmation
+  // Step 4: Confirmation
   term('\n').bold.cyan('📋 Summary\n\n');
   term.gray('Images: ').white(`${selectedImages.length || 'blank template'}\n`);
   term.gray('Pin size: ').white(`${size}\n`);
   term.gray('Output: ').white(`${output}\n`);
   term.gray('Duplicate: ').white(`${duplicate ? 'Yes' : 'No'}\n`);
-  if (fillWithEdgeColor || backgroundColor || borderColor) {
-    term.gray('Styling: ').white(`${fillWithEdgeColor ? 'Auto background' : backgroundColor ? `Background: ${backgroundColor}` : ''}`);
-    if (borderColor) term.white(` | Border: ${borderColor} (${borderWidth}mm)`);
-    term('\n');
-  }
-  if (textPins.length > 0) {
-    term.gray('Text: ').white(`${textPins.length} pin(s) with text\n`);
-  }
+  term.gray('Edit mode: ').white(`${editImages ? 'Yes' : 'No (using defaults)'}\n`);
   term('\n');
   
   const proceed = await confirm({
@@ -799,6 +722,9 @@ export async function runInteractiveMode(): Promise<InteractiveConfig> {
     textColor,
     textSize,
     textOutline,
-    textOutlineWidth
+    textOutlineWidth,
+    zoomLevels,
+    offsetXValues,
+    offsetYValues
   };
 }
