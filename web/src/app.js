@@ -248,7 +248,9 @@ elements.btnNextPin.addEventListener('click', () => {
 // Save current pin settings
 function saveCurrentPinSettings() {
   const img = state.images[state.currentImageIndex];
-  img.zoom = parseFloat(elements.sliderZoom.value);
+  // Convert slider value (-100 to 300) to zoom, where 0% = 1x
+  // Clamp minimum to 0.1x to avoid zero/negative values
+  img.zoom = Math.max(0.1, 1 + (parseFloat(elements.sliderZoom.value) / 100));
   img.fillWithEdgeColor = elements.checkboxEdgeColor.checked;
   
   // Only save backgroundColor if edge color is NOT checked
@@ -286,8 +288,9 @@ function updatePinEditor() {
   elements.btnNextPin.disabled = state.currentImageIndex === state.images.length - 1;
   
   // Update controls
-  elements.sliderZoom.value = img.zoom;
-  elements.labelZoom.textContent = img.zoom.toFixed(1);
+  // Convert zoom to slider percentage value (-100 to 300), where 1x = 0%
+  elements.sliderZoom.value = (img.zoom - 1) * 100;
+  elements.labelZoom.textContent = Math.round((img.zoom - 1) * 100);
   elements.checkboxEdgeColor.checked = img.fillWithEdgeColor;
   elements.inputBgColor.value = img.backgroundColor || '#ffffff';
   elements.inputBgColor.disabled = img.fillWithEdgeColor; // Disable when edge color is used
@@ -362,7 +365,9 @@ elements.btnAddTextLine.addEventListener('click', () => {
 
 // Control listeners
 elements.sliderZoom.addEventListener('input', (e) => {
-  elements.labelZoom.textContent = parseFloat(e.target.value).toFixed(1);
+  // Display the percentage value directly
+  const percentage = parseFloat(e.target.value);
+  elements.labelZoom.textContent = Math.round(percentage);
   renderPinPreview();
 });
 
@@ -395,8 +400,8 @@ elements.btnResetTransform.addEventListener('click', () => {
   img.offsetY = 0;
   touchState.lastOffsetX = 0;
   touchState.lastOffsetY = 0;
-  elements.sliderZoom.value = 1.0;
-  elements.labelZoom.textContent = '1.0';
+  elements.sliderZoom.value = 0; // 0% = 1.0x (middle)
+  elements.labelZoom.textContent = '0';
   renderPinPreview();
 });
 
