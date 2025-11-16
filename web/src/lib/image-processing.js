@@ -1,5 +1,6 @@
 /**
  * Extract average edge color from an image using Canvas API
+ * Samples from multiple rings moving inward to find non-transparent pixels
  * @param {ImageBitmap} bitmap
  * @returns {Promise<{r: number, g: number, b: number}>}
  */
@@ -16,62 +17,81 @@ export async function extractEdgeColor(bitmap) {
   let totalB = 0;
   let pixelCount = 0;
   
-  const alphaThreshold = 10;
+  const alphaThreshold = 128; // Higher threshold to skip semi-transparent pixels
+  const maxInset = Math.min(width, height) * 0.1; // Sample up to 10% inward
+  const insetStep = Math.max(1, Math.floor(maxInset / 5)); // Try up to 5 rings
   
-  // Sample top edge
-  const topData = ctx.getImageData(0, 0, width, 1);
-  for (let x = 0; x < width; x++) {
-    const idx = x * 4;
-    const alpha = topData.data[idx + 3];
-    if (alpha > alphaThreshold) {
-      totalR += topData.data[idx];
-      totalG += topData.data[idx + 1];
-      totalB += topData.data[idx + 2];
-      pixelCount++;
+  // Try sampling from progressively more inward positions
+  for (let inset = 0; inset <= maxInset && pixelCount < 100; inset += insetStep) {
+    // Sample top edge
+    if (inset < height) {
+      const topData = ctx.getImageData(inset, inset, width - inset * 2, 1);
+      for (let x = 0; x < width - inset * 2; x++) {
+        const idx = x * 4;
+        const alpha = topData.data[idx + 3];
+        if (alpha > alphaThreshold) {
+          totalR += topData.data[idx];
+          totalG += topData.data[idx + 1];
+          totalB += topData.data[idx + 2];
+          pixelCount++;
+        }
+      }
     }
-  }
-  
-  // Sample bottom edge
-  const bottomData = ctx.getImageData(0, height - 1, width, 1);
-  for (let x = 0; x < width; x++) {
-    const idx = x * 4;
-    const alpha = bottomData.data[idx + 3];
-    if (alpha > alphaThreshold) {
-      totalR += bottomData.data[idx];
-      totalG += bottomData.data[idx + 1];
-      totalB += bottomData.data[idx + 2];
-      pixelCount++;
+    
+    // Sample bottom edge
+    if (inset < height) {
+      const bottomY = height - 1 - inset;
+      const bottomData = ctx.getImageData(inset, bottomY, width - inset * 2, 1);
+      for (let x = 0; x < width - inset * 2; x++) {
+        const idx = x * 4;
+        const alpha = bottomData.data[idx + 3];
+        if (alpha > alphaThreshold) {
+          totalR += bottomData.data[idx];
+          totalG += bottomData.data[idx + 1];
+          totalB += bottomData.data[idx + 2];
+          pixelCount++;
+        }
+      }
     }
-  }
-  
-  // Sample left edge (skip corners)
-  const leftData = ctx.getImageData(0, 1, 1, height - 2);
-  for (let y = 0; y < height - 2; y++) {
-    const idx = y * 4;
-    const alpha = leftData.data[idx + 3];
-    if (alpha > alphaThreshold) {
-      totalR += leftData.data[idx];
-      totalG += leftData.data[idx + 1];
-      totalB += leftData.data[idx + 2];
-      pixelCount++;
+    
+    // Sample left edge (skip corners already sampled)
+    if (inset < width && height - inset * 2 - 2 > 0) {
+      const leftData = ctx.getImageData(inset, inset + 1, 1, height - inset * 2 - 2);
+      for (let y = 0; y < height - inset * 2 - 2; y++) {
+        const idx = y * 4;
+        const alpha = leftData.data[idx + 3];
+        if (alpha > alphaThreshold) {
+          totalR += leftData.data[idx];
+          totalG += leftData.data[idx + 1];
+          totalB += leftData.data[idx + 2];
+          pixelCount++;
+        }
+      }
     }
-  }
-  
-  // Sample right edge (skip corners)
-  const rightData = ctx.getImageData(width - 1, 1, 1, height - 2);
-  for (let y = 0; y < height - 2; y++) {
-    const idx = y * 4;
-    const alpha = rightData.data[idx + 3];
-    if (alpha > alphaThreshold) {
-      totalR += rightData.data[idx];
-      totalG += rightData.data[idx + 1];
-      totalB += rightData.data[idx + 2];
-      pixelCount++;
+    
+    // Sample right edge (skip corners already sampled)
+    if (inset < width && height - inset * 2 - 2 > 0) {
+      const rightX = width - 1 - inset;
+      const rightData = ctx.getImageData(rightX, inset + 1, 1, height - inset * 2 - 2);
+      for (let y = 0; y < height - inset * 2 - 2; y++) {
+        const idx = y * 4;
+        const alpha = rightData.data[idx + 3];
+        if (alpha > alphaThreshold) {
+          totalR += rightData.data[idx];
+          totalG += rightData.data[idx + 1];
+          totalB += rightData.data[idx + 2];
+          pixelCount++;
+        }
+      }
     }
+    
+    // If we found enough opaque pixels, stop searching
+    if (pixelCount >= 100) break;
   }
   
   if (pixelCount === 0) {
-    return { r: 0, g: 0, b: 0 };
+    // Fallback: return white if no opaque pixels found
+    return { r: 255, g: 255, b: 255 };
   }
   
   return {
