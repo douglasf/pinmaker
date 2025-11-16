@@ -94,4 +94,5 @@ export const A4_PAGE = {
  * @property {PinSize} pinSize
  * @property {boolean} duplicate
  * @property {number} currentImageIndex
+ * @property {boolean} showPinGuide - Show dashed inner circle in PDF
  */

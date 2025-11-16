@@ -152,15 +152,17 @@ export async function generatePDF(state) {
       borderWidth: 1,
     });
     
-    // Draw pin size guide circle (light gray dashed)
-    page.drawCircle({
-      x: position.x,
-      y: A4_PAGE.pageHeight - position.y,
-      size: pinRadius,
-      borderColor: rgb(0.5, 0.5, 0.5),
-      borderWidth: 0.5,
-      borderDashArray: [3, 3],
-    });
+    // Draw pin size guide circle (light gray dashed) - optional based on state
+    if (state.showPinGuide) {
+      page.drawCircle({
+        x: position.x,
+        y: A4_PAGE.pageHeight - position.y,
+        size: pinRadius,
+        borderColor: rgb(0.5, 0.5, 0.5),
+        borderWidth: 0.5,
+        borderDashArray: [3, 3],
+      });
+    }
     
     // Draw text overlay
     if (imageState.textLines.length > 0) {

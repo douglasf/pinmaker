@@ -9,6 +9,7 @@ const state = {
   imageDistribution: [], // Maps circle index to unique image index
   pinSize: '32mm',
   duplicate: false,
+  showPinGuide: true, // Show dashed inner circle in PDF
   currentImageIndex: 0,
 };
 
@@ -41,6 +42,7 @@ const elements = {
   // Config section
   selectPinSize: document.getElementById('select-pin-size'),
   checkboxDuplicate: document.getElementById('checkbox-duplicate'),
+  checkboxShowPinGuide: document.getElementById('checkbox-show-pin-guide'),
   btnBackSelect: document.getElementById('btn-back-select'),
   btnNextEdit: document.getElementById('btn-next-edit'),
   
@@ -276,6 +278,7 @@ elements.btnBackSelect.addEventListener('click', () => {
 elements.btnNextEdit.addEventListener('click', () => {
   state.pinSize = elements.selectPinSize.value;
   state.duplicate = elements.checkboxDuplicate.checked;
+  state.showPinGuide = elements.checkboxShowPinGuide.checked;
   state.currentImageIndex = 0;
   
   // Calculate total circles needed
