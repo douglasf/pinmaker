@@ -20,6 +20,10 @@ export async function generatePDF(state) {
   // Process all images
   const processedCircles = [];
   
+  // Use high resolution for PDF export (300 DPI equivalent)
+  // PDF points are 72 DPI, so multiply by ~4 for 300 DPI
+  const pdfDpiMultiplier = 4;
+  
   for (let circleIdx = 0; circleIdx < totalCircles; circleIdx++) {
     const imageIdx = imageDistribution[circleIdx];
     const imageState = state.images[imageIdx];
@@ -35,29 +39,30 @@ export async function generatePDF(state) {
       edgeColor = await extractEdgeColor(imageState.bitmap);
     }
     
-    // Process image
+    // Process image at high resolution for PDF quality
     const processedBitmap = await processImageForCircle(
       imageState.bitmap,
-      config.pinSizePt,
-      config.circleSizePt,
+      config.pinSizePt * pdfDpiMultiplier,
+      config.circleSizePt * pdfDpiMultiplier,
       imageState.zoom,
-      imageState.offsetX,
-      imageState.offsetY
+      imageState.offsetX * pdfDpiMultiplier,
+      imageState.offsetY * pdfDpiMultiplier
     );
     
-    // Render to canvas and extract PNG with circular clipping
-    const canvas = new OffscreenCanvas(Math.round(config.pinSizePt), Math.round(config.pinSizePt));
+    // Render to canvas at high resolution and extract PNG with circular clipping
+    const canvasSize = Math.round(config.pinSizePt * pdfDpiMultiplier);
+    const canvas = new OffscreenCanvas(canvasSize, canvasSize);
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Failed to get canvas context');
     
     // Create circular clipping path
-    const pinRadius = config.pinSizePt / 2;
+    const pinRadius = canvasSize / 2;
     ctx.beginPath();
     ctx.arc(pinRadius, pinRadius, pinRadius, 0, Math.PI * 2);
     ctx.clip();
     
     // Draw the processed image within the circular clip
-    ctx.drawImage(processedBitmap, 0, 0, config.pinSizePt, config.pinSizePt);
+    ctx.drawImage(processedBitmap, 0, 0, canvasSize, canvasSize);
     
     // Convert to PNG
     const blob = await canvas.convertToBlob({ type: 'image/png' });
