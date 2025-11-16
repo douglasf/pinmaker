@@ -45,13 +45,19 @@ export async function generatePDF(state) {
       imageState.offsetY
     );
     
-    // Render to canvas and extract PNG
+    // Render to canvas and extract PNG with circular clipping
     const canvas = new OffscreenCanvas(Math.round(config.pinSizePt), Math.round(config.pinSizePt));
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Failed to get canvas context');
     
-    // Draw the processed image
-    ctx.drawImage(processedBitmap, 0, 0);
+    // Create circular clipping path
+    const pinRadius = config.pinSizePt / 2;
+    ctx.beginPath();
+    ctx.arc(pinRadius, pinRadius, pinRadius, 0, Math.PI * 2);
+    ctx.clip();
+    
+    // Draw the processed image within the circular clip
+    ctx.drawImage(processedBitmap, 0, 0, config.pinSizePt, config.pinSizePt);
     
     // Convert to PNG
     const blob = await canvas.convertToBlob({ type: 'image/png' });
