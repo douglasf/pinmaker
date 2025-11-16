@@ -5,7 +5,8 @@ import { generatePDF } from './lib/pdf-generator.js';
 
 // App state
 const state = {
-  images: [],
+  images: [], // Unique images only
+  imageDistribution: [], // Maps circle index to unique image index
   pinSize: '32mm',
   duplicate: false,
   currentImageIndex: 0,
@@ -45,10 +46,14 @@ const elements = {
   pinCounter: document.getElementById('pin-counter'),
   canvasPreview: document.getElementById('canvas-preview'),
   btnResetTransform: document.getElementById('btn-reset-transform'),
+  btnResetBackground: document.getElementById('btn-reset-background'),
+  btnResetBorder: document.getElementById('btn-reset-border'),
+  btnResetText: document.getElementById('btn-reset-text'),
   sliderZoom: document.getElementById('slider-zoom'),
   labelZoom: document.getElementById('label-zoom'),
   checkboxEdgeColor: document.getElementById('checkbox-edge-color'),
   inputBgColor: document.getElementById('input-bg-color'),
+  labelBgColor: document.getElementById('label-bg-color'),
   inputBorderColor: document.getElementById('input-border-color'),
   sliderBorderWidth: document.getElementById('slider-border-width'),
   labelBorderWidth: document.getElementById('label-border-width'),
@@ -59,14 +64,13 @@ const elements = {
   inputTextOutline: document.getElementById('input-text-outline'),
   sliderTextOutlineWidth: document.getElementById('slider-text-outline-width'),
   labelTextOutlineWidth: document.getElementById('label-text-outline-width'),
-  btnBackConfig: document.getElementById('btn-back-config'),
-  btnPreview: document.getElementById('btn-preview'),
   
   // Preview section
   previewContainer: document.getElementById('preview-container'),
-  btnBackEdit: document.getElementById('btn-back-edit'),
   
   // Header
+  btnHeaderBack: document.getElementById('btn-header-back'),
+  btnHeaderPreview: document.getElementById('btn-header-preview'),
   btnExport: document.getElementById('btn-export'),
   
   // Loading
@@ -82,6 +86,27 @@ function showSection(sectionId) {
     }
   });
   document.getElementById(sectionId).classList.add('active');
+  
+  // Update header buttons based on current section
+  updateHeaderButtons(sectionId);
+}
+
+// Update header buttons visibility
+function updateHeaderButtons(sectionId) {
+  // Hide all header buttons by default
+  elements.btnHeaderBack.style.display = 'none';
+  elements.btnHeaderPreview.style.display = 'none';
+  elements.btnExport.style.display = 'none';
+  
+  if (sectionId === 'section-edit') {
+    // Edit section: show Back and Preview All
+    elements.btnHeaderBack.style.display = 'inline-flex';
+    elements.btnHeaderPreview.style.display = 'inline-flex';
+  } else if (sectionId === 'section-preview') {
+    // Preview section: show Back and Export PDF
+    elements.btnHeaderBack.style.display = 'inline-flex';
+    elements.btnExport.style.display = 'inline-flex';
+  }
 }
 
 // Show loading
@@ -172,53 +197,38 @@ elements.btnNextEdit.addEventListener('click', () => {
   state.duplicate = elements.checkboxDuplicate.checked;
   state.currentImageIndex = 0;
   
-  // Calculate total circles
+  // Calculate total circles needed
   const config = PIN_CONFIGS[state.pinSize];
   const totalCircles = state.duplicate 
     ? Math.max(state.images.length, config.circlesPerPage)
     : state.images.length;
   
-  // Expand state.images array to match totalCircles if duplicating
+  // Create distribution array (maps circle index to unique image index)
   if (state.duplicate && totalCircles > state.images.length) {
-    const distribution = createImageDistribution(state.images.length, totalCircles);
-    const expandedImages = distribution.map(idx => {
-      const original = state.images[idx];
-      return {
-        file: original.file,
-        url: original.url,
-        bitmap: original.bitmap,
-        zoom: original.zoom,
-        offsetX: original.offsetX,
-        offsetY: original.offsetY,
-        fillWithEdgeColor: original.fillWithEdgeColor,
-        backgroundColor: original.backgroundColor,
-        borderColor: original.borderColor,
-        borderWidth: original.borderWidth,
-        textLines: [...original.textLines],
-        textPosition: original.textPosition,
-        textColor: original.textColor,
-        textOutline: original.textOutline,
-        textOutlineWidth: original.textOutlineWidth,
-      };
-    });
-    state.images = expandedImages;
+    state.imageDistribution = createImageDistribution(state.images.length, totalCircles);
+  } else {
+    // No duplication: 1-to-1 mapping
+    state.imageDistribution = state.images.map((_, idx) => idx);
   }
   
   updatePinEditor();
   showSection('section-edit');
 });
 
-elements.btnBackConfig.addEventListener('click', () => {
-  showSection('section-config');
+// Header navigation buttons
+elements.btnHeaderBack.addEventListener('click', () => {
+  // Determine where to go back based on current section
+  const currentSection = document.querySelector('.section.active');
+  if (currentSection.id === 'section-edit') {
+    showSection('section-config');
+  } else if (currentSection.id === 'section-preview') {
+    showSection('section-edit');
+  }
 });
 
-elements.btnPreview.addEventListener('click', async () => {
+elements.btnHeaderPreview.addEventListener('click', async () => {
   await generatePreview();
   showSection('section-preview');
-});
-
-elements.btnBackEdit.addEventListener('click', () => {
-  showSection('section-edit');
 });
 
 // Pin navigation
@@ -241,9 +251,18 @@ elements.btnNextPin.addEventListener('click', () => {
 // Save current pin settings
 function saveCurrentPinSettings() {
   const img = state.images[state.currentImageIndex];
-  img.zoom = parseFloat(elements.sliderZoom.value);
+  // Convert slider value (-100 to 300) to zoom, where 0% = 1x
+  // Clamp minimum to 0.1x to avoid zero/negative values
+  img.zoom = Math.max(0.1, 1 + (parseFloat(elements.sliderZoom.value) / 100));
   img.fillWithEdgeColor = elements.checkboxEdgeColor.checked;
-  img.backgroundColor = elements.inputBgColor.value;
+  
+  // Only save backgroundColor if edge color is NOT checked
+  if (img.fillWithEdgeColor) {
+    img.backgroundColor = '';
+  } else {
+    img.backgroundColor = elements.inputBgColor.value;
+  }
+  
   img.borderColor = elements.inputBorderColor.value;
   img.borderWidth = parseFloat(elements.sliderBorderWidth.value);
   img.textPosition = elements.selectTextPosition.value;
@@ -272,10 +291,13 @@ function updatePinEditor() {
   elements.btnNextPin.disabled = state.currentImageIndex === state.images.length - 1;
   
   // Update controls
-  elements.sliderZoom.value = img.zoom;
-  elements.labelZoom.textContent = img.zoom.toFixed(1);
+  // Convert zoom to slider percentage value (-100 to 300), where 1x = 0%
+  elements.sliderZoom.value = (img.zoom - 1) * 100;
+  elements.labelZoom.textContent = Math.round((img.zoom - 1) * 100);
   elements.checkboxEdgeColor.checked = img.fillWithEdgeColor;
   elements.inputBgColor.value = img.backgroundColor || '#ffffff';
+  elements.inputBgColor.disabled = img.fillWithEdgeColor; // Disable when edge color is used
+  elements.labelBgColor.style.opacity = img.fillWithEdgeColor ? '0.5' : '1'; // Grey out label
   elements.inputBorderColor.value = img.borderColor || '#000000';
   elements.sliderBorderWidth.value = img.borderWidth;
   elements.labelBorderWidth.textContent = img.borderWidth.toFixed(1);
@@ -346,7 +368,9 @@ elements.btnAddTextLine.addEventListener('click', () => {
 
 // Control listeners
 elements.sliderZoom.addEventListener('input', (e) => {
-  elements.labelZoom.textContent = parseFloat(e.target.value).toFixed(1);
+  // Display the percentage value directly
+  const percentage = parseFloat(e.target.value);
+  elements.labelZoom.textContent = Math.round(percentage);
   renderPinPreview();
 });
 
@@ -360,7 +384,12 @@ elements.sliderTextOutlineWidth.addEventListener('input', (e) => {
   renderPinPreview();
 });
 
-elements.checkboxEdgeColor.addEventListener('change', renderPinPreview);
+elements.checkboxEdgeColor.addEventListener('change', () => {
+  // Disable/enable background color input based on edge color checkbox
+  elements.inputBgColor.disabled = elements.checkboxEdgeColor.checked;
+  elements.labelBgColor.style.opacity = elements.checkboxEdgeColor.checked ? '0.5' : '1';
+  renderPinPreview();
+});
 elements.inputBgColor.addEventListener('input', renderPinPreview);
 elements.inputBorderColor.addEventListener('input', renderPinPreview);
 elements.selectTextPosition.addEventListener('change', renderPinPreview);
@@ -374,8 +403,45 @@ elements.btnResetTransform.addEventListener('click', () => {
   img.offsetY = 0;
   touchState.lastOffsetX = 0;
   touchState.lastOffsetY = 0;
-  elements.sliderZoom.value = 1.0;
-  elements.labelZoom.textContent = '1.0';
+  elements.sliderZoom.value = 0; // 0% = 1.0x (middle)
+  elements.labelZoom.textContent = '0';
+  renderPinPreview();
+});
+
+elements.btnResetBackground.addEventListener('click', () => {
+  const img = state.images[state.currentImageIndex];
+  img.fillWithEdgeColor = false;
+  img.backgroundColor = '#ffffff';
+  elements.checkboxEdgeColor.checked = false;
+  elements.inputBgColor.value = '#ffffff';
+  elements.inputBgColor.disabled = false;
+  elements.labelBgColor.style.opacity = '1';
+  renderPinPreview();
+});
+
+elements.btnResetBorder.addEventListener('click', () => {
+  const img = state.images[state.currentImageIndex];
+  img.borderColor = '#000000';
+  img.borderWidth = 0;
+  elements.inputBorderColor.value = '#000000';
+  elements.sliderBorderWidth.value = 0;
+  elements.labelBorderWidth.textContent = '0.0';
+  renderPinPreview();
+});
+
+elements.btnResetText.addEventListener('click', () => {
+  const img = state.images[state.currentImageIndex];
+  img.textLines = [];
+  img.textPosition = 'bottom';
+  img.textColor = '#ffffff';
+  img.textOutline = '#000000';
+  img.textOutlineWidth = 2;
+  elements.textLinesContainer.innerHTML = '';
+  elements.selectTextPosition.value = 'bottom';
+  elements.inputTextColor.value = '#ffffff';
+  elements.inputTextOutline.value = '#000000';
+  elements.sliderTextOutlineWidth.value = 2;
+  elements.labelTextOutlineWidth.textContent = '2.0';
   renderPinPreview();
 });
 
@@ -463,6 +529,12 @@ async function renderPinPreview() {
   // Clear canvas
   ctx.clearRect(0, 0, displaySize, displaySize);
   
+  // Extract edge color from ORIGINAL image if needed (before processing)
+  let edgeColor;
+  if (img.fillWithEdgeColor) {
+    edgeColor = await extractEdgeColor(img.bitmap);
+  }
+  
   // Process image
   const processedBitmap = await processImageForCircle(
     img.bitmap,
@@ -472,12 +544,6 @@ async function renderPinPreview() {
     img.offsetX,
     img.offsetY
   );
-  
-  // Extract edge color if needed
-  let edgeColor;
-  if (img.fillWithEdgeColor) {
-    edgeColor = await extractEdgeColor(processedBitmap);
-  }
   
   // Scale to display size
   const scale = displaySize / config.circleSizePt;
@@ -506,7 +572,8 @@ async function generatePreview() {
     saveCurrentPinSettings();
     
     const config = PIN_CONFIGS[state.pinSize];
-    const positions = calculateLayout(state.images.length, config);
+    const totalCircles = state.imageDistribution.length;
+    const positions = calculateLayout(totalCircles, config);
     const totalPages = getTotalPages(positions);
     
     elements.previewContainer.innerHTML = '';
@@ -532,10 +599,17 @@ async function generatePreview() {
       // Render each pin on this page
       for (const pos of pagePositions) {
         const circleIdx = positions.indexOf(pos);
-        const img = state.images[circleIdx];
+        const uniqueImageIdx = state.imageDistribution[circleIdx];
+        const img = state.images[uniqueImageIdx];
         
         if (!img.bitmap) {
           img.bitmap = await createImageBitmap(img.file);
+        }
+        
+        // Extract edge color from original image if needed (before processing)
+        let edgeColor;
+        if (img.fillWithEdgeColor) {
+          edgeColor = await extractEdgeColor(img.bitmap);
         }
         
         const processedBitmap = await processImageForCircle(
@@ -546,11 +620,6 @@ async function generatePreview() {
           img.offsetX,
           img.offsetY
         );
-        
-        let edgeColor;
-        if (img.fillWithEdgeColor) {
-          edgeColor = await extractEdgeColor(processedBitmap);
-        }
         
         renderPinToCanvas(ctx, processedBitmap, pos.x, pos.y, config, img, edgeColor);
       }
@@ -605,3 +674,27 @@ elements.btnExport.addEventListener('click', async () => {
     hideLoading();
   }
 });
+
+// Tab navigation
+const tabButtons = document.querySelectorAll('.tab-btn');
+const tabContents = document.querySelectorAll('.tab-content');
+
+tabButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const targetTab = button.dataset.tab;
+    
+    // Update active tab button
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    button.classList.add('active');
+    
+    // Update active tab content
+    tabContents.forEach(content => {
+      if (content.dataset.tab === targetTab) {
+        content.classList.add('active');
+      } else {
+        content.classList.remove('active');
+      }
+    });
+  });
+});
+

@@ -11,9 +11,13 @@
 <body>
   <div id="app">
     <header class="header">
+      <div class="header-left">
+        <button id="btn-header-back" class="btn btn-secondary btn-small" style="display: none;">‹ Back</button>
+      </div>
       <h1>Pin Maker</h1>
       <div class="header-actions">
-        <button id="btn-export" class="btn btn-primary" disabled>Export PDF</button>
+        <button id="btn-header-preview" class="btn btn-primary btn-small" style="display: none;">Preview All</button>
+        <button id="btn-export" class="btn btn-primary btn-small" style="display: none;">Export PDF</button>
       </div>
     </header>
 
@@ -60,91 +64,126 @@
 
       <!-- Step 3: Edit Pins -->
       <section id="section-edit" class="section">
-        <h2>Edit Pins</h2>
-        <div class="pin-navigator">
-          <button id="btn-prev-pin" class="btn btn-icon" disabled>‹</button>
-          <span id="pin-counter" class="pin-counter">Pin 1 of 1</span>
-          <button id="btn-next-pin" class="btn btn-icon" disabled>›</button>
+        <div class="edit-header">
+          <h2>Edit Pins</h2>
+          <div class="pin-navigator">
+            <button id="btn-prev-pin" class="btn btn-icon" disabled>‹</button>
+            <span id="pin-counter" class="pin-counter">Pin 1 of 1</span>
+            <button id="btn-next-pin" class="btn btn-icon" disabled>›</button>
+          </div>
         </div>
 
         <div class="canvas-container">
           <canvas id="canvas-preview" class="canvas-preview"></canvas>
-          <div class="canvas-controls">
-            <button id="btn-reset-transform" class="btn btn-small">Reset</button>
-          </div>
         </div>
 
-        <div class="pin-controls">
-          <div class="control-group">
-            <h3>Transform</h3>
-            <div class="form-group">
-              <label for="slider-zoom">Zoom: <span id="label-zoom">1.0</span>x</label>
-              <input type="range" id="slider-zoom" class="slider" min="0.5" max="3" step="0.1" value="1">
-            </div>
-            <div class="form-group">
-              <label>Pan (touch and drag on canvas)</label>
-            </div>
-          </div>
-
-          <div class="control-group">
-            <h3>Background</h3>
-            <div class="form-group">
-              <label class="checkbox-label">
-                <input type="checkbox" id="checkbox-edge-color">
-                <span>Use edge color</span>
-              </label>
-            </div>
-            <div class="form-group">
-              <label for="input-bg-color">Custom color</label>
-              <input type="color" id="input-bg-color" class="input">
+        <div class="tabs-container">
+          <!-- Tab Content -->
+          <div class="tab-content active" data-tab="zoom">
+            <div class="control-group">
+              <div class="control-group-header">
+                <h3>Transform</h3>
+                <button id="btn-reset-transform" class="btn btn-small">Reset</button>
+              </div>
+              <div class="form-group">
+                <label for="slider-zoom">Zoom: <span id="label-zoom">0</span>%</label>
+                <input type="range" id="slider-zoom" class="slider" min="-100" max="300" step="1" value="0">
+              </div>
+              <div class="form-group">
+                <label>Pan: Touch and drag on canvas above</label>
+              </div>
             </div>
           </div>
 
-          <div class="control-group">
-            <h3>Border</h3>
-            <div class="form-group">
-              <label for="input-border-color">Border color</label>
-              <input type="color" id="input-border-color" class="input" value="#000000">
-            </div>
-            <div class="form-group">
-              <label for="slider-border-width">Width: <span id="label-border-width">0</span>mm</label>
-              <input type="range" id="slider-border-width" class="slider" min="0" max="5" step="0.5" value="0">
+          <div class="tab-content" data-tab="background">
+            <div class="control-group">
+              <div class="control-group-header">
+                <h3>Background</h3>
+                <button id="btn-reset-background" class="btn btn-small">Reset</button>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="checkbox-edge-color">
+                  <span>Use edge color</span>
+                </label>
+              </div>
+              <div class="form-group">
+                <label for="input-bg-color" id="label-bg-color">Custom color</label>
+                <input type="color" id="input-bg-color" class="input">
+              </div>
             </div>
           </div>
 
-          <div class="control-group">
-            <h3>Text Overlay</h3>
-            <div id="text-lines-container" class="text-lines-container">
-              <!-- Text lines will be added dynamically -->
-            </div>
-            <button id="btn-add-text-line" class="btn btn-small">+ Add Line</button>
-            
-            <div class="form-group">
-              <label for="select-text-position">Position</label>
-              <select id="select-text-position" class="input">
-                <option value="top">Top</option>
-                <option value="center">Center</option>
-                <option value="bottom" selected>Bottom</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="input-text-color">Text color</label>
-              <input type="color" id="input-text-color" class="input" value="#ffffff">
-            </div>
-            <div class="form-group">
-              <label for="input-text-outline">Outline color</label>
-              <input type="color" id="input-text-outline" class="input" value="#000000">
-            </div>
-            <div class="form-group">
-              <label for="slider-text-outline-width">Outline width: <span id="label-text-outline-width">2</span>pt</label>
-              <input type="range" id="slider-text-outline-width" class="slider" min="0" max="5" step="0.5" value="2">
+          <div class="tab-content" data-tab="border">
+            <div class="control-group">
+              <div class="control-group-header">
+                <h3>Border</h3>
+                <button id="btn-reset-border" class="btn btn-small">Reset</button>
+              </div>
+              <div class="form-group">
+                <label for="input-border-color">Border color</label>
+                <input type="color" id="input-border-color" class="input" value="#000000">
+              </div>
+              <div class="form-group">
+                <label for="slider-border-width">Width: <span id="label-border-width">0</span>mm</label>
+                <input type="range" id="slider-border-width" class="slider" min="0" max="5" step="0.5" value="0">
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="section-actions">
-          <button id="btn-back-config" class="btn btn-secondary">Back</button>
-          <button id="btn-preview" class="btn btn-primary">Preview All</button>
+          <div class="tab-content" data-tab="text">
+            <div class="control-group">
+              <div class="control-group-header">
+                <h3>Text Overlay</h3>
+                <button id="btn-reset-text" class="btn btn-small">Reset</button>
+              </div>
+              <div id="text-lines-container" class="text-lines-container">
+                <!-- Text lines will be added dynamically -->
+              </div>
+              <button id="btn-add-text-line" class="btn btn-small">+ Add Line</button>
+              
+              <div class="form-group">
+                <label for="select-text-position">Position</label>
+                <select id="select-text-position" class="input">
+                  <option value="top">Top</option>
+                  <option value="center">Center</option>
+                  <option value="bottom" selected>Bottom</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="input-text-color">Text color</label>
+                <input type="color" id="input-text-color" class="input" value="#ffffff">
+              </div>
+              <div class="form-group">
+                <label for="input-text-outline">Outline color</label>
+                <input type="color" id="input-text-outline" class="input" value="#000000">
+              </div>
+              <div class="form-group">
+                <label for="slider-text-outline-width">Outline width: <span id="label-text-outline-width">2</span>pt</label>
+                <input type="range" id="slider-text-outline-width" class="slider" min="0" max="5" step="0.5" value="2">
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab Bar (iOS style) -->
+          <div class="tab-bar">
+            <button class="tab-btn active" data-tab="zoom">
+              <span class="tab-icon">🔍</span>
+              <span class="tab-label">Zoom</span>
+            </button>
+            <button class="tab-btn" data-tab="background">
+              <span class="tab-icon">🎨</span>
+              <span class="tab-label">Background</span>
+            </button>
+            <button class="tab-btn" data-tab="border">
+              <span class="tab-icon">⭕</span>
+              <span class="tab-label">Border</span>
+            </button>
+            <button class="tab-btn" data-tab="text">
+              <span class="tab-icon">📝</span>
+              <span class="tab-label">Text</span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -153,9 +192,6 @@
         <h2>Preview</h2>
         <div id="preview-container" class="preview-container">
           <!-- Preview pages will be rendered here -->
-        </div>
-        <div class="section-actions">
-          <button id="btn-back-edit" class="btn btn-secondary">Back to Edit</button>
         </div>
       </section>
     </main>

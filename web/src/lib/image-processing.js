@@ -216,49 +216,78 @@ export function renderPinToCanvas(
   ctx.save();
   
   // Determine background fill
-  let fillColor = imageState.backgroundColor;
-  if (!fillColor && imageState.fillWithEdgeColor && edgeColor) {
+  let fillColor = null;
+  
+  // Check if backgroundColor is set and not empty
+  if (imageState.backgroundColor && imageState.backgroundColor.trim() !== '') {
+    fillColor = imageState.backgroundColor;
+  } else if (imageState.fillWithEdgeColor && edgeColor) {
     fillColor = `rgb(${edgeColor.r}, ${edgeColor.g}, ${edgeColor.b})`;
   }
   
-  // Draw border ring if specified
-  if (imageState.borderColor && imageState.borderWidth > 0) {
-    const borderWidthPt = imageState.borderWidth * 2.83465;
-    ctx.fillStyle = imageState.borderColor;
-    ctx.beginPath();
-    ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Cut out inner circle
-    if (fillColor) {
-      ctx.fillStyle = fillColor;
-    } else {
-      ctx.fillStyle = 'white';
-    }
-    ctx.beginPath();
-    ctx.arc(x, y, circleRadius - borderWidthPt, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (fillColor) {
+  // Draw background circle if specified (fills to outer circle)
+  if (fillColor) {
     ctx.fillStyle = fillColor;
     ctx.beginPath();
     ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
     ctx.fill();
   }
   
+  // Clip to circular shape for the image (at pin size)
+  ctx.beginPath();
+  ctx.arc(x, y, pinRadius, 0, Math.PI * 2);
+  ctx.clip();
+  
   // Draw the image
   ctx.drawImage(processedBitmap, x - pinRadius, y - pinRadius, config.pinSizePt, config.pinSizePt);
   
-  // Draw cutting outline
+  // Reset clipping
+  ctx.restore();
+  ctx.save();
+  
+  // Draw border ring ON TOP of image if specified
+  // Formula: gapDiameter = (outerCircleDiameter - pinDiameter)
+  //          totalGapDiameter = gapDiameter + borderWidth
+  //          borderInnerDiameter = outerCircleDiameter - totalGapDiameter
+  if (imageState.borderColor && imageState.borderWidth > 0) {
+    const borderWidthPt = imageState.borderWidth * 2.83465; // mm to pt
+    const circleDiameter = config.circleSizePt;
+    const pinDiameter = config.pinSizePt;
+    const gapDiameter = circleDiameter - pinDiameter;
+    const totalGapDiameter = gapDiameter + borderWidthPt;
+    const borderInnerRadius = (circleDiameter - totalGapDiameter) / 2;
+    const borderOuterRadius = circleRadius;
+    const borderRingWidth = borderOuterRadius - borderInnerRadius;
+    
+    // Draw border as a stroked ring
+    ctx.strokeStyle = imageState.borderColor;
+    ctx.lineWidth = borderRingWidth;
+    const borderMidRadius = borderInnerRadius + borderRingWidth / 2;
+    ctx.beginPath();
+    ctx.arc(x, y, borderMidRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  
+  // Draw text overlay
+  if (imageState.textLines.length > 0) {
+    drawTextOverlay(ctx, imageState.textLines, x, y, config.pinSizePt, imageState.textPosition, imageState.textColor, imageState.textOutline, imageState.textOutlineWidth);
+  }
+  
+  // Draw cutting outline (outer circle)
   ctx.strokeStyle = 'black';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
   ctx.stroke();
   
-  // Draw text overlay
-  if (imageState.textLines.length > 0) {
-    drawTextOverlay(ctx, imageState.textLines, x, y, config.pinSizePt, imageState.textPosition, imageState.textColor, imageState.textOutline, imageState.textOutlineWidth);
-  }
+  // Draw pin size guide circle (light gray dashed - always on top)
+  ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.arc(x, y, pinRadius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]); // Reset dash
   
   ctx.restore();
 }

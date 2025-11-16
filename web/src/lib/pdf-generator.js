@@ -1,6 +1,6 @@
 import { PDFDocument, rgb } from 'pdf-lib';
 import { PIN_CONFIGS, A4_PAGE } from '../core/types.js';
-import { calculateLayout, createImageDistribution } from '../core/layout.js';
+import { calculateLayout } from '../core/layout.js';
 import { processImageForCircle, extractEdgeColor } from './image-processing.js';
 
 /**
@@ -11,17 +11,11 @@ import { processImageForCircle, extractEdgeColor } from './image-processing.js';
 export async function generatePDF(state) {
   const config = PIN_CONFIGS[state.pinSize];
   
-  // Calculate total circles
-  const totalCircles = state.duplicate 
-    ? Math.max(state.images.length, config.circlesPerPage)
-    : state.images.length;
+  // Use the distribution array from state (already calculated)
+  const totalCircles = state.imageDistribution.length;
+  const imageDistribution = state.imageDistribution;
   
   const positions = calculateLayout(totalCircles, config);
-  
-  // Create distribution for duplication
-  const imageDistribution = state.duplicate
-    ? createImageDistribution(state.images.length, totalCircles)
-    : state.images.map((_, idx) => idx);
   
   // Process all images
   const processedCircles = [];
@@ -35,6 +29,12 @@ export async function generatePDF(state) {
       imageState.bitmap = await createImageBitmap(imageState.file);
     }
     
+    // Extract edge color from ORIGINAL image if needed (before processing)
+    let edgeColor;
+    if (imageState.fillWithEdgeColor) {
+      edgeColor = await extractEdgeColor(imageState.bitmap);
+    }
+    
     // Process image
     const processedBitmap = await processImageForCircle(
       imageState.bitmap,
@@ -44,12 +44,6 @@ export async function generatePDF(state) {
       imageState.offsetX,
       imageState.offsetY
     );
-    
-    // Extract edge color if needed
-    let edgeColor;
-    if (imageState.fillWithEdgeColor) {
-      edgeColor = await extractEdgeColor(processedBitmap);
-    }
     
     // Render to canvas and extract PNG
     const canvas = new OffscreenCanvas(Math.round(config.pinSizePt), Math.round(config.pinSizePt));
@@ -87,7 +81,8 @@ export async function generatePDF(state) {
     
     // Determine background color
     let bgColor = undefined;
-    if (imageState.backgroundColor) {
+    // Check if backgroundColor is set and not empty
+    if (imageState.backgroundColor && imageState.backgroundColor.trim() !== '') {
       bgColor = parseColor(imageState.backgroundColor);
     } else if (imageState.fillWithEdgeColor && edgeColor) {
       bgColor = rgb(edgeColor.r / 255, edgeColor.g / 255, edgeColor.b / 255);
@@ -96,34 +91,13 @@ export async function generatePDF(state) {
     const circleRadius = config.circleSizePt / 2;
     const pinRadius = config.pinSizePt / 2;
     
-    // Draw background circle if specified
+    // Draw background circle if specified (fills to outer circle)
     if (bgColor) {
       page.drawCircle({
         x: position.x,
         y: A4_PAGE.pageHeight - position.y, // PDF coordinates are bottom-up
         size: circleRadius,
         color: bgColor,
-      });
-    }
-    
-    // Draw border ring if specified
-    if (imageState.borderColor && imageState.borderWidth > 0) {
-      const borderWidthPt = imageState.borderWidth * 2.83465;
-      const borderColor = parseColor(imageState.borderColor);
-      
-      page.drawCircle({
-        x: position.x,
-        y: A4_PAGE.pageHeight - position.y,
-        size: circleRadius,
-        color: borderColor,
-      });
-      
-      // Draw inner circle (background or white)
-      page.drawCircle({
-        x: position.x,
-        y: A4_PAGE.pageHeight - position.y,
-        size: circleRadius - borderWidthPt,
-        color: bgColor ? bgColor : rgb(1, 1, 1),
       });
     }
     
@@ -136,13 +110,50 @@ export async function generatePDF(state) {
       height: config.pinSizePt,
     });
     
-    // Draw cutting outline
+    // Draw border ring ON TOP of image if specified
+    // We'll draw it as a ring by drawing outer circle then inner circle with opacity
+    // Formula: gapDiameter = (outerCircleDiameter - pinDiameter)
+    //          totalGapDiameter = gapDiameter + borderWidth
+    //          borderInnerDiameter = outerCircleDiameter - totalGapDiameter
+    if (imageState.borderColor && imageState.borderWidth > 0) {
+      const borderWidthPt = imageState.borderWidth * 2.83465; // mm to pt
+      const borderColor = parseColor(imageState.borderColor);
+      const circleDiameter = config.circleSizePt;
+      const pinDiameter = config.pinSizePt;
+      const gapDiameter = circleDiameter - pinDiameter;
+      const totalGapDiameter = gapDiameter + borderWidthPt;
+      const borderInnerRadius = (circleDiameter - totalGapDiameter) / 2;
+      const borderOuterRadius = circleRadius;
+      const borderRingWidth = borderOuterRadius - borderInnerRadius;
+      
+      // Draw border as a stroked circle
+      const borderMidRadius = borderInnerRadius + borderRingWidth / 2;
+      page.drawCircle({
+        x: position.x,
+        y: A4_PAGE.pageHeight - position.y,
+        size: borderMidRadius,
+        borderColor: borderColor,
+        borderWidth: borderRingWidth,
+      });
+    }
+    
+    // Draw cutting outline (outer circle)
     page.drawCircle({
       x: position.x,
       y: A4_PAGE.pageHeight - position.y,
       size: circleRadius,
       borderColor: rgb(0, 0, 0),
       borderWidth: 1,
+    });
+    
+    // Draw pin size guide circle (light gray dashed)
+    page.drawCircle({
+      x: position.x,
+      y: A4_PAGE.pageHeight - position.y,
+      size: pinRadius,
+      borderColor: rgb(0.5, 0.5, 0.5),
+      borderWidth: 0.5,
+      borderDashArray: [3, 3],
     });
     
     // Draw text overlay
