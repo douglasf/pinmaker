@@ -33,15 +33,15 @@
  */
 export const PIN_CONFIGS = {
   '32mm': {
-    pinSize: 32,
-    pinSizePt: 32 * 2.83465, // mm to points conversion
+    pinSize: 36, // 32mm + 4mm for paper bend
+    pinSizePt: 36 * 2.83465, // mm to points conversion
     circleSize: 43,
     circleSizePt: 43 * 2.83465,
     circlesPerPage: 20,
   },
   '58mm': {
-    pinSize: 58,
-    pinSizePt: 58 * 2.83465,
+    pinSize: 62, // 58mm + 4mm for paper bend
+    pinSizePt: 62 * 2.83465,
     circleSize: 70,
     circleSizePt: 70 * 2.83465,
     circlesPerPage: 6,
