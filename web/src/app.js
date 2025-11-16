@@ -35,6 +35,7 @@ const elements = {
   // Select section
   inputImages: document.getElementById('input-images'),
   imageList: document.getElementById('image-list'),
+  btnAddBlank: document.getElementById('btn-add-blank'),
   btnNextConfig: document.getElementById('btn-next-config'),
   
   // Config section
@@ -154,8 +155,19 @@ function updateImageList() {
     item.className = 'image-item';
     
     const imgEl = document.createElement('img');
-    imgEl.src = img.url;
-    imgEl.alt = img.file.name;
+    if (img.isBlank) {
+      // For blank pins, create a data URL with white background
+      imgEl.src = 'data:image/svg+xml,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">' +
+        '<rect width="100" height="100" fill="white"/>' +
+        '<text x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="#999">Blank</text>' +
+        '</svg>'
+      );
+      imgEl.alt = 'Blank pin';
+    } else {
+      imgEl.src = img.url;
+      imgEl.alt = img.file.name;
+    }
     
     const removeBtn = document.createElement('button');
     removeBtn.className = 'image-item-remove';
@@ -172,10 +184,54 @@ function updateImageList() {
 
 // Remove image
 function removeImage(index) {
-  URL.revokeObjectURL(state.images[index].url);
+  if (state.images[index].url) {
+    URL.revokeObjectURL(state.images[index].url);
+  }
   state.images.splice(index, 1);
   updateImageList();
 }
+
+// Create a blank pin
+async function createBlankPin() {
+  // Create a transparent canvas
+  const canvas = new OffscreenCanvas(800, 800);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  
+  // Leave it transparent (don't fill anything)
+  // Canvas is transparent by default
+  
+  // Convert to blob
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  const file = new File([blob], 'blank.png', { type: 'image/png' });
+  const bitmap = await createImageBitmap(blob);
+  
+  state.images.push({
+    file,
+    url: null, // No URL needed for blank
+    bitmap,
+    isBlank: true,
+    zoom: 1.0,
+    offsetX: 0,
+    offsetY: 0,
+    fillWithEdgeColor: false,
+    backgroundColor: '#ffffff',
+    borderColor: '',
+    borderWidth: 0,
+    textLines: [],
+    textPosition: 'bottom',
+    textColor: '#000000',
+    textOutline: '#ffffff',
+    textOutlineWidth: 2,
+  });
+  
+  updateImageList();
+}
+
+// Handle blank pin button
+elements.btnAddBlank.addEventListener('click', () => {
+  createBlankPin();
+});
 
 // Handle image selection
 elements.inputImages.addEventListener('change', async (e) => {
