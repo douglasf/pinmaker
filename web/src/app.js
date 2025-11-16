@@ -92,6 +92,16 @@ function showSection(sectionId) {
   
   // Update header buttons based on current section
   updateHeaderButtons(sectionId);
+  
+  // Initialize canvas touch behavior when entering edit section
+  if (sectionId === 'section-edit') {
+    const canvasContainer = document.querySelector('.canvas-container');
+    const zoomTab = document.querySelector('.tab-content[data-tab="zoom"]');
+    if (canvasContainer) {
+      // Set touch-action based on whether zoom tab is active
+      canvasContainer.style.touchAction = (zoomTab && zoomTab.classList.contains('active')) ? 'none' : 'auto';
+    }
+  }
 }
 
 // Update header buttons visibility
@@ -450,6 +460,12 @@ elements.btnResetText.addEventListener('click', () => {
 
 // Canvas touch handling
 elements.canvasPreview.addEventListener('touchstart', (e) => {
+  // Only allow touch interaction on zoom tab
+  const zoomTab = document.querySelector('.tab-content[data-tab="zoom"]');
+  if (!zoomTab || !zoomTab.classList.contains('active')) {
+    return;
+  }
+  
   if (e.touches.length === 1) {
     // Single touch - panning
     e.preventDefault();
@@ -474,6 +490,12 @@ elements.canvasPreview.addEventListener('touchstart', (e) => {
 });
 
 elements.canvasPreview.addEventListener('touchmove', (e) => {
+  // Only allow touch interaction on zoom tab
+  const zoomTab = document.querySelector('.tab-content[data-tab="zoom"]');
+  if (!zoomTab || !zoomTab.classList.contains('active')) {
+    return;
+  }
+  
   if (touchState.isPanning && e.touches.length === 1) {
     // Single touch - panning
     e.preventDefault();
@@ -747,6 +769,16 @@ tabButtons.forEach(button => {
         content.classList.remove('active');
       }
     });
+    
+    // Update canvas touch-action based on active tab
+    const canvasContainer = document.querySelector('.canvas-container');
+    if (targetTab === 'zoom') {
+      // Allow canvas interaction on zoom tab
+      canvasContainer.style.touchAction = 'none';
+    } else {
+      // Allow page scrolling on other tabs
+      canvasContainer.style.touchAction = 'auto';
+    }
   });
 });
 

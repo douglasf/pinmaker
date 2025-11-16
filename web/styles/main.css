@@ -344,7 +344,7 @@ body {
   box-shadow: var(--shadow-md);
   margin-bottom: var(--spacing-lg);
   overflow: hidden;
-  touch-action: none;
+  touch-action: auto;
 }
 
 .canvas-preview {
