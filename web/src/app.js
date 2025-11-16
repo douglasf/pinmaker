@@ -19,6 +19,9 @@ let touchState = {
   startY: 0,
   lastOffsetX: 0,
   lastOffsetY: 0,
+  isPinching: false,
+  initialDistance: 0,
+  initialZoom: 1.0,
 };
 
 // DOM elements
@@ -448,15 +451,31 @@ elements.btnResetText.addEventListener('click', () => {
 // Canvas touch handling
 elements.canvasPreview.addEventListener('touchstart', (e) => {
   if (e.touches.length === 1) {
+    // Single touch - panning
     e.preventDefault();
     touchState.isPanning = true;
+    touchState.isPinching = false;
     touchState.startX = e.touches[0].clientX;
     touchState.startY = e.touches[0].clientY;
+  } else if (e.touches.length === 2) {
+    // Two touches - pinch zoom
+    e.preventDefault();
+    touchState.isPanning = false;
+    touchState.isPinching = true;
+    
+    // Calculate initial distance between two fingers
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    touchState.initialDistance = Math.sqrt(dx * dx + dy * dy);
+    
+    const img = state.images[state.currentImageIndex];
+    touchState.initialZoom = img.zoom;
   }
 });
 
 elements.canvasPreview.addEventListener('touchmove', (e) => {
   if (touchState.isPanning && e.touches.length === 1) {
+    // Single touch - panning
     e.preventDefault();
     const deltaX = e.touches[0].clientX - touchState.startX;
     const deltaY = e.touches[0].clientY - touchState.startY;
@@ -466,15 +485,48 @@ elements.canvasPreview.addEventListener('touchmove', (e) => {
     img.offsetY = touchState.lastOffsetY + deltaY * 0.5;
     
     renderPinPreview();
+  } else if (touchState.isPinching && e.touches.length === 2) {
+    // Two touches - pinch zoom
+    e.preventDefault();
+    
+    // Calculate current distance between two fingers
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const currentDistance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Calculate zoom scale (how much the distance changed)
+    const scale = currentDistance / touchState.initialDistance;
+    
+    const img = state.images[state.currentImageIndex];
+    // Apply zoom with clamping (0.1x to 4x)
+    img.zoom = Math.max(0.1, Math.min(4, touchState.initialZoom * scale));
+    
+    // Update slider and label
+    elements.sliderZoom.value = (img.zoom - 1) * 100;
+    elements.labelZoom.textContent = Math.round((img.zoom - 1) * 100);
+    
+    renderPinPreview();
   }
 });
 
-elements.canvasPreview.addEventListener('touchend', () => {
-  if (touchState.isPanning) {
-    touchState.isPanning = false;
-    const img = state.images[state.currentImageIndex];
-    touchState.lastOffsetX = img.offsetX;
-    touchState.lastOffsetY = img.offsetY;
+elements.canvasPreview.addEventListener('touchend', (e) => {
+  if (e.touches.length === 0) {
+    // All fingers lifted
+    if (touchState.isPanning) {
+      touchState.isPanning = false;
+      const img = state.images[state.currentImageIndex];
+      touchState.lastOffsetX = img.offsetX;
+      touchState.lastOffsetY = img.offsetY;
+    }
+    if (touchState.isPinching) {
+      touchState.isPinching = false;
+    }
+  } else if (e.touches.length === 1 && touchState.isPinching) {
+    // One finger lifted during pinch, switch to panning
+    touchState.isPinching = false;
+    touchState.isPanning = true;
+    touchState.startX = e.touches[0].clientX;
+    touchState.startY = e.touches[0].clientY;
   }
 });
 

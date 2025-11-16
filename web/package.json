@@ -4,7 +4,7 @@
   "description": "Browser-based pin maker for creating PDF layouts",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview"
   },
