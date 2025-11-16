@@ -29,7 +29,6 @@ let touchState = {
 const elements = {
   // Sections
   sectionSelect: document.getElementById('section-select'),
-  sectionConfig: document.getElementById('section-config'),
   sectionEdit: document.getElementById('section-edit'),
   sectionPreview: document.getElementById('section-preview'),
   
@@ -37,14 +36,13 @@ const elements = {
   inputImages: document.getElementById('input-images'),
   imageList: document.getElementById('image-list'),
   btnAddBlank: document.getElementById('btn-add-blank'),
-  btnNextConfig: document.getElementById('btn-next-config'),
-  
-  // Config section
   selectPinSize: document.getElementById('select-pin-size'),
+  btnNextEdit: document.getElementById('btn-next-edit'),
+  
+  // Preview section
+  previewContainer: document.getElementById('preview-container'),
   checkboxDuplicate: document.getElementById('checkbox-duplicate'),
   checkboxShowPinGuide: document.getElementById('checkbox-show-pin-guide'),
-  btnBackSelect: document.getElementById('btn-back-select'),
-  btnNextEdit: document.getElementById('btn-next-edit'),
   
   // Header elements
   headerTitle: document.getElementById('header-title'),
@@ -74,9 +72,6 @@ const elements = {
   inputTextOutline: document.getElementById('input-text-outline'),
   sliderTextOutlineWidth: document.getElementById('slider-text-outline-width'),
   labelTextOutlineWidth: document.getElementById('label-text-outline-width'),
-  
-  // Preview section
-  previewContainer: document.getElementById('preview-container'),
   
   // Header
   btnHeaderBack: document.getElementById('btn-header-back'),
@@ -181,7 +176,7 @@ function updateImageList() {
     elements.imageList.appendChild(item);
   });
   
-  elements.btnNextConfig.disabled = state.images.length === 0;
+  elements.btnNextEdit.disabled = state.images.length === 0;
 }
 
 // Remove image
@@ -267,33 +262,20 @@ elements.inputImages.addEventListener('change', async (e) => {
 });
 
 // Navigation
-elements.btnNextConfig.addEventListener('click', () => {
-  showSection('section-config');
-});
-
-elements.btnBackSelect.addEventListener('click', () => {
-  showSection('section-select');
-});
-
 elements.btnNextEdit.addEventListener('click', () => {
   state.pinSize = elements.selectPinSize.value;
-  state.duplicate = elements.checkboxDuplicate.checked;
-  state.showPinGuide = elements.checkboxShowPinGuide.checked;
   state.currentImageIndex = 0;
   
-  // Calculate total circles needed
-  const config = PIN_CONFIGS[state.pinSize];
-  const totalCircles = state.duplicate 
-    ? Math.max(state.images.length, config.circlesPerPage)
-    : state.images.length;
+  // Calculate total circles needed - use state values or defaults
+  // Note: duplicate and showPinGuide will be read from preview section later
+  state.duplicate = false; // Default until user changes it in preview
+  state.showPinGuide = true; // Default
   
-  // Create distribution array (maps circle index to unique image index)
-  if (state.duplicate && totalCircles > state.images.length) {
-    state.imageDistribution = createImageDistribution(state.images.length, totalCircles);
-  } else {
-    // No duplication: 1-to-1 mapping
-    state.imageDistribution = state.images.map((_, idx) => idx);
-  }
+  const config = PIN_CONFIGS[state.pinSize];
+  const totalCircles = state.images.length;
+  
+  // Create distribution array (no duplication initially)
+  state.imageDistribution = state.images.map((_, idx) => idx);
   
   updatePinEditor();
   showSection('section-edit');
@@ -304,13 +286,29 @@ elements.btnHeaderBack.addEventListener('click', () => {
   // Determine where to go back based on current section
   const currentSection = document.querySelector('.section.active');
   if (currentSection.id === 'section-edit') {
-    showSection('section-config');
+    showSection('section-select');
   } else if (currentSection.id === 'section-preview') {
     showSection('section-edit');
   }
 });
 
 elements.btnHeaderPreview.addEventListener('click', async () => {
+  // Read checkbox values from preview section
+  state.duplicate = elements.checkboxDuplicate.checked;
+  state.showPinGuide = elements.checkboxShowPinGuide.checked;
+  
+  // Recalculate distribution if duplicate changed
+  const config = PIN_CONFIGS[state.pinSize];
+  const totalCircles = state.duplicate 
+    ? Math.max(state.images.length, config.circlesPerPage)
+    : state.images.length;
+  
+  if (state.duplicate && totalCircles > state.images.length) {
+    state.imageDistribution = createImageDistribution(state.images.length, totalCircles);
+  } else {
+    state.imageDistribution = state.images.map((_, idx) => idx);
+  }
+  
   await generatePreview();
   showSection('section-preview');
 });
@@ -703,7 +701,8 @@ async function renderPinPreview() {
     config.circleSizePt / 2,
     config,
     img,
-    edgeColor
+    edgeColor,
+    true // Always show pin guide in editor for reference
   );
   
   ctx.restore();
@@ -766,7 +765,7 @@ async function generatePreview() {
           img.offsetY
         );
         
-        renderPinToCanvas(ctx, processedBitmap, pos.x, pos.y, config, img, edgeColor);
+        renderPinToCanvas(ctx, processedBitmap, pos.x, pos.y, config, img, edgeColor, state.showPinGuide);
       }
       
       ctx.restore();
@@ -817,6 +816,36 @@ elements.btnExport.addEventListener('click', async () => {
     console.error('PDF generation error:', error);
     alert('Failed to generate PDF: ' + error.message);
     hideLoading();
+  }
+});
+
+// Live preview updates for checkboxes in preview section
+elements.checkboxDuplicate.addEventListener('change', async () => {
+  const currentSection = document.querySelector('.section.active');
+  if (currentSection.id === 'section-preview') {
+    state.duplicate = elements.checkboxDuplicate.checked;
+    
+    // Recalculate distribution
+    const config = PIN_CONFIGS[state.pinSize];
+    const totalCircles = state.duplicate 
+      ? Math.max(state.images.length, config.circlesPerPage)
+      : state.images.length;
+    
+    if (state.duplicate && totalCircles > state.images.length) {
+      state.imageDistribution = createImageDistribution(state.images.length, totalCircles);
+    } else {
+      state.imageDistribution = state.images.map((_, idx) => idx);
+    }
+    
+    await generatePreview();
+  }
+});
+
+elements.checkboxShowPinGuide.addEventListener('change', async () => {
+  const currentSection = document.querySelector('.section.active');
+  if (currentSection.id === 'section-preview') {
+    state.showPinGuide = elements.checkboxShowPinGuide.checked;
+    await generatePreview();
   }
 });
 

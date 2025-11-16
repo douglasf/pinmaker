@@ -228,7 +228,8 @@ export function renderPinToCanvas(
   y,
   config,
   imageState,
-  edgeColor
+  edgeColor,
+  showPinGuide = true
 ) {
   const circleRadius = config.circleSizePt / 2;
   const pinRadius = config.pinSizePt / 2;
@@ -300,14 +301,16 @@ export function renderPinToCanvas(
   ctx.arc(x, y, circleRadius, 0, Math.PI * 2);
   ctx.stroke();
   
-  // Draw pin size guide circle (light gray dashed - always on top)
-  ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([5, 5]);
-  ctx.beginPath();
-  ctx.arc(x, y, pinRadius, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.setLineDash([]); // Reset dash
+  // Draw pin size guide circle (light gray dashed - always on top) - optional
+  if (showPinGuide) {
+    ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.arc(x, y, pinRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]); // Reset dash
+  }
   
   ctx.restore();
 }

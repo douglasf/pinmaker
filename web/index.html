@@ -43,14 +43,7 @@
           <button id="btn-add-blank" class="btn btn-secondary btn-small">+ Add Blank Pin</button>
         </div>
         <div id="image-list" class="image-list"></div>
-        <div class="section-actions">
-          <button id="btn-next-config" class="btn btn-primary" disabled>Next: Configure</button>
-        </div>
-      </section>
-
-      <!-- Step 2: Configuration -->
-      <section id="section-config" class="section">
-        <h2>Configuration</h2>
+        
         <div class="config-form">
           <div class="form-group">
             <label for="select-pin-size">Pin Size</label>
@@ -59,26 +52,14 @@
               <option value="58mm">58mm (6 pins per page)</option>
             </select>
           </div>
-          <div class="form-group">
-            <label class="checkbox-label">
-              <input type="checkbox" id="checkbox-duplicate">
-              <span>Duplicate to fill page</span>
-            </label>
-          </div>
-          <div class="form-group">
-            <label class="checkbox-label">
-              <input type="checkbox" id="checkbox-show-pin-guide" checked>
-              <span>Show pin guide circle in PDF</span>
-            </label>
-          </div>
         </div>
+        
         <div class="section-actions">
-          <button id="btn-back-select" class="btn btn-secondary">Back</button>
-          <button id="btn-next-edit" class="btn btn-primary">Next: Edit Pins</button>
+          <button id="btn-next-edit" class="btn btn-primary" disabled>Next: Edit Pins</button>
         </div>
       </section>
 
-      <!-- Step 3: Edit Pins -->
+      <!-- Step 2: Edit Pins -->
       <section id="section-edit" class="section">
         <div class="canvas-container">
           <canvas id="canvas-preview" class="canvas-preview"></canvas>
@@ -194,9 +175,25 @@
         </div>
       </section>
 
-      <!-- Step 4: Preview -->
+      <!-- Step 3: Preview -->
       <section id="section-preview" class="section">
         <h2>Preview</h2>
+        
+        <div class="config-form">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="checkbox-duplicate">
+              <span>Duplicate to fill page</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="checkbox-show-pin-guide" checked>
+              <span>Show pin guide circle in PDF</span>
+            </label>
+          </div>
+        </div>
+        
         <div id="preview-container" class="preview-container">
           <!-- Preview pages will be rendered here -->
         </div>
