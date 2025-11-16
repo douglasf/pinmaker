@@ -14,7 +14,14 @@
       <div class="header-left">
         <button id="btn-header-back" class="btn btn-secondary btn-small" style="display: none;">‹ Back</button>
       </div>
-      <h1>Pin Maker</h1>
+      <div class="header-center">
+        <h1 id="header-title">Pin Maker</h1>
+        <div id="header-pin-navigator" class="pin-navigator" style="display: none;">
+          <button id="btn-prev-pin-header" class="btn btn-icon" disabled>‹</button>
+          <span id="pin-counter-header" class="pin-counter">1 of 1</span>
+          <button id="btn-next-pin-header" class="btn btn-icon" disabled>›</button>
+        </div>
+      </div>
       <div class="header-actions">
         <button id="btn-header-preview" class="btn btn-primary btn-small" style="display: none;">Preview All</button>
         <button id="btn-export" class="btn btn-primary btn-small" style="display: none;">Export PDF</button>
@@ -64,15 +71,6 @@
 
       <!-- Step 3: Edit Pins -->
       <section id="section-edit" class="section">
-        <div class="edit-header">
-          <h2>Edit Pins</h2>
-          <div class="pin-navigator">
-            <button id="btn-prev-pin" class="btn btn-icon" disabled>‹</button>
-            <span id="pin-counter" class="pin-counter">Pin 1 of 1</span>
-            <button id="btn-next-pin" class="btn btn-icon" disabled>›</button>
-          </div>
-        </div>
-
         <div class="canvas-container">
           <canvas id="canvas-preview" class="canvas-preview"></canvas>
         </div>

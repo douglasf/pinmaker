@@ -43,10 +43,14 @@ const elements = {
   btnBackSelect: document.getElementById('btn-back-select'),
   btnNextEdit: document.getElementById('btn-next-edit'),
   
+  // Header elements
+  headerTitle: document.getElementById('header-title'),
+  headerPinNavigator: document.getElementById('header-pin-navigator'),
+  btnPrevPinHeader: document.getElementById('btn-prev-pin-header'),
+  btnNextPinHeader: document.getElementById('btn-next-pin-header'),
+  pinCounterHeader: document.getElementById('pin-counter-header'),
+  
   // Edit section
-  btnPrevPin: document.getElementById('btn-prev-pin'),
-  btnNextPin: document.getElementById('btn-next-pin'),
-  pinCounter: document.getElementById('pin-counter'),
   canvasPreview: document.getElementById('canvas-preview'),
   btnResetTransform: document.getElementById('btn-reset-transform'),
   btnResetBackground: document.getElementById('btn-reset-background'),
@@ -112,13 +116,21 @@ function updateHeaderButtons(sectionId) {
   elements.btnExport.style.display = 'none';
   
   if (sectionId === 'section-edit') {
-    // Edit section: show Back and Preview All
+    // Edit section: show Back and Preview All, swap title for pin navigator
     elements.btnHeaderBack.style.display = 'inline-flex';
     elements.btnHeaderPreview.style.display = 'inline-flex';
+    elements.headerTitle.style.display = 'none';
+    elements.headerPinNavigator.style.display = 'flex';
   } else if (sectionId === 'section-preview') {
     // Preview section: show Back and Export PDF
     elements.btnHeaderBack.style.display = 'inline-flex';
     elements.btnExport.style.display = 'inline-flex';
+    elements.headerTitle.style.display = 'block';
+    elements.headerPinNavigator.style.display = 'none';
+  } else {
+    // Other sections: show title
+    elements.headerTitle.style.display = 'block';
+    elements.headerPinNavigator.style.display = 'none';
   }
 }
 
@@ -244,8 +256,8 @@ elements.btnHeaderPreview.addEventListener('click', async () => {
   showSection('section-preview');
 });
 
-// Pin navigation
-elements.btnPrevPin.addEventListener('click', () => {
+// Pin navigation (header buttons)
+elements.btnPrevPinHeader.addEventListener('click', () => {
   if (state.currentImageIndex > 0) {
     saveCurrentPinSettings();
     state.currentImageIndex--;
@@ -253,7 +265,7 @@ elements.btnPrevPin.addEventListener('click', () => {
   }
 });
 
-elements.btnNextPin.addEventListener('click', () => {
+elements.btnNextPinHeader.addEventListener('click', () => {
   if (state.currentImageIndex < state.images.length - 1) {
     saveCurrentPinSettings();
     state.currentImageIndex++;
@@ -298,10 +310,10 @@ function saveCurrentPinSettings() {
 function updatePinEditor() {
   const img = state.images[state.currentImageIndex];
   
-  // Update navigation
-  elements.pinCounter.textContent = `Pin ${state.currentImageIndex + 1} of ${state.images.length}`;
-  elements.btnPrevPin.disabled = state.currentImageIndex === 0;
-  elements.btnNextPin.disabled = state.currentImageIndex === state.images.length - 1;
+  // Update header navigation
+  elements.pinCounterHeader.textContent = `${state.currentImageIndex + 1} of ${state.images.length}`;
+  elements.btnPrevPinHeader.disabled = state.currentImageIndex === 0;
+  elements.btnNextPinHeader.disabled = state.currentImageIndex === state.images.length - 1;
   
   // Update controls
   // Convert zoom to slider percentage value (-100 to 300), where 1x = 0%
