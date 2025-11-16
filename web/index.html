@@ -75,23 +75,95 @@
 
         <div class="canvas-container">
           <canvas id="canvas-preview" class="canvas-preview"></canvas>
-          <div class="canvas-controls">
-            <button id="btn-reset-transform" class="btn btn-small">Reset</button>
-          </div>
         </div>
 
         <div class="tabs-container">
           <!-- Tab Content -->
           <div class="tab-content active" data-tab="zoom">
             <div class="control-group">
-              <h3>Transform</h3>
+              <div class="control-group-header">
+                <h3>Transform</h3>
+                <button id="btn-reset-transform" class="btn btn-small">Reset</button>
+              </div>
               <div class="form-group">
                 <label for="slider-zoom">Zoom: <span id="label-zoom">0</span>%</label>
                 <input type="range" id="slider-zoom" class="slider" min="-100" max="300" step="1" value="0">
-              </div></div>
+              </div>
               <div class="form-group">
                 <label>Pan: Touch and drag on canvas above</label>
               </div>
+            </div>
+          </div>
+
+          <div class="tab-content" data-tab="background">
+            <div class="control-group">
+              <div class="control-group-header">
+                <h3>Background</h3>
+                <button id="btn-reset-background" class="btn btn-small">Reset</button>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="checkbox-edge-color">
+                  <span>Use edge color</span>
+                </label>
+              </div>
+              <div class="form-group">
+                <label for="input-bg-color" id="label-bg-color">Custom color</label>
+                <input type="color" id="input-bg-color" class="input">
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-content" data-tab="border">
+            <div class="control-group">
+              <div class="control-group-header">
+                <h3>Border</h3>
+                <button id="btn-reset-border" class="btn btn-small">Reset</button>
+              </div>
+              <div class="form-group">
+                <label for="input-border-color">Border color</label>
+                <input type="color" id="input-border-color" class="input" value="#000000">
+              </div>
+              <div class="form-group">
+                <label for="slider-border-width">Width: <span id="label-border-width">0</span>mm</label>
+                <input type="range" id="slider-border-width" class="slider" min="0" max="5" step="0.5" value="0">
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-content" data-tab="text">
+            <div class="control-group">
+              <div class="control-group-header">
+                <h3>Text Overlay</h3>
+                <button id="btn-reset-text" class="btn btn-small">Reset</button>
+              </div>
+              <div id="text-lines-container" class="text-lines-container">
+                <!-- Text lines will be added dynamically -->
+              </div>
+              <button id="btn-add-text-line" class="btn btn-small">+ Add Line</button>
+              
+              <div class="form-group">
+                <label for="select-text-position">Position</label>
+                <select id="select-text-position" class="input">
+                  <option value="top">Top</option>
+                  <option value="center">Center</option>
+                  <option value="bottom" selected>Bottom</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="input-text-color">Text color</label>
+                <input type="color" id="input-text-color" class="input" value="#ffffff">
+              </div>
+              <div class="form-group">
+                <label for="input-text-outline">Outline color</label>
+                <input type="color" id="input-text-outline" class="input" value="#000000">
+              </div>
+              <div class="form-group">
+                <label for="slider-text-outline-width">Outline width: <span id="label-text-outline-width">2</span>pt</label>
+                <input type="range" id="slider-text-outline-width" class="slider" min="0" max="5" step="0.5" value="2">
+              </div>
+            </div>
+          </div>
             </div>
           </div>
 

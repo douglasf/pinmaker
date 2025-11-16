@@ -46,6 +46,9 @@ const elements = {
   pinCounter: document.getElementById('pin-counter'),
   canvasPreview: document.getElementById('canvas-preview'),
   btnResetTransform: document.getElementById('btn-reset-transform'),
+  btnResetBackground: document.getElementById('btn-reset-background'),
+  btnResetBorder: document.getElementById('btn-reset-border'),
+  btnResetText: document.getElementById('btn-reset-text'),
   sliderZoom: document.getElementById('slider-zoom'),
   labelZoom: document.getElementById('label-zoom'),
   checkboxEdgeColor: document.getElementById('checkbox-edge-color'),
@@ -402,6 +405,43 @@ elements.btnResetTransform.addEventListener('click', () => {
   touchState.lastOffsetY = 0;
   elements.sliderZoom.value = 0; // 0% = 1.0x (middle)
   elements.labelZoom.textContent = '0';
+  renderPinPreview();
+});
+
+elements.btnResetBackground.addEventListener('click', () => {
+  const img = state.images[state.currentImageIndex];
+  img.fillWithEdgeColor = false;
+  img.backgroundColor = '#ffffff';
+  elements.checkboxEdgeColor.checked = false;
+  elements.inputBgColor.value = '#ffffff';
+  elements.inputBgColor.disabled = false;
+  elements.labelBgColor.style.opacity = '1';
+  renderPinPreview();
+});
+
+elements.btnResetBorder.addEventListener('click', () => {
+  const img = state.images[state.currentImageIndex];
+  img.borderColor = '#000000';
+  img.borderWidth = 0;
+  elements.inputBorderColor.value = '#000000';
+  elements.sliderBorderWidth.value = 0;
+  elements.labelBorderWidth.textContent = '0.0';
+  renderPinPreview();
+});
+
+elements.btnResetText.addEventListener('click', () => {
+  const img = state.images[state.currentImageIndex];
+  img.textLines = [];
+  img.textPosition = 'bottom';
+  img.textColor = '#ffffff';
+  img.textOutline = '#000000';
+  img.textOutlineWidth = 2;
+  elements.textLinesContainer.innerHTML = '';
+  elements.selectTextPosition.value = 'bottom';
+  elements.inputTextColor.value = '#ffffff';
+  elements.inputTextOutline.value = '#000000';
+  elements.sliderTextOutlineWidth.value = 2;
+  elements.labelTextOutlineWidth.textContent = '2.0';
   renderPinPreview();
 });
 
